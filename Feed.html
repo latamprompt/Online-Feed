@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LatAm Prompt Feed</title>
   <style>
     body {
@@ -110,8 +111,18 @@
         }
 
         const orderedGroups = Object.keys(groups);
-
         let currentGroupIndex = 0;
+
+        const btn = document.createElement("button");
+        btn.id = "loadMore";
+        btn.textContent = "Load More";
+        btn.style.display = "block";
+        btn.style.margin = "2rem auto";
+        btn.style.padding = "0.75rem 1.5rem";
+        btn.style.fontSize = "1rem";
+        btn.style.cursor = "pointer";
+        btn.onclick = renderBatch;
+        feedContainer.appendChild(btn);
 
         function renderBatch() {
           let count = 0;
@@ -143,53 +154,4 @@
               const meta = document.createElement("div");
               meta.className = "meta";
               const pubDate = new Date(item.pubDate);
-              meta.textContent = `${item.author || item.source?.title || "Unknown"} · ${pubDate.toDateString()}`;
-
-              const title = document.createElement("div");
-              title.className = "title";
-              title.innerHTML = `<a href="${item.link}" target="_blank">${item.title}</a>`;
-
-              const summary = document.createElement("div");
-              summary.className = "summary";
-              summary.textContent = item.description.replace(/<[^>]*>/g, "").slice(0, 400);
-
-              content.appendChild(meta);
-              content.appendChild(title);
-              content.appendChild(summary);
-
-              card.appendChild(img);
-              card.appendChild(content);
-
-              feedContainer.appendChild(card);
-            }
-
-            if (!group.length) currentGroupIndex++;
-          }
-
-          offset += count;
-          if (offset >= articles.length) {
-            document.getElementById("loadMore").style.display = "none";
-          }
-        }
-
-        renderBatch();
-
-        const btn = document.createElement("button");
-        btn.id = "loadMore";
-        btn.textContent = "Load More";
-        btn.style.display = "block";
-        btn.style.margin = "2rem auto";
-        btn.style.padding = "0.75rem 1.5rem";
-        btn.style.fontSize = "1rem";
-        btn.style.cursor = "pointer";
-        btn.onclick = renderBatch;
-
-        feedContainer.appendChild(btn);
-      })
-      .catch(err => {
-        console.error("Feed load failed", err);
-        feedContainer.innerHTML = "<p>Could not load feed.</p>";
-      });
-  </script>
-</body>
-</html>
+              meta.textContent = `${item.author || item.source?.title || "Unknown"} · ${pub
