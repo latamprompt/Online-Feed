@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LatAm Prompt Feed</title>
   <style>
     body {
@@ -11,12 +10,10 @@
       margin: 0;
       padding: 2rem 1rem;
     }
-
     .feed {
       max-width: 620px;
       margin: 0 auto;
     }
-
     h3 {
       font-size: 1.1rem;
       color: #333;
@@ -24,7 +21,6 @@
       border-bottom: 1px solid #eee;
       padding-bottom: 0.25rem;
     }
-
     .card {
       display: flex;
       gap: 1rem;
@@ -33,7 +29,6 @@
       border-bottom: 1px solid #eee;
       margin-bottom: 1.5rem;
     }
-
     .card img {
       width: 80px;
       height: 80px;
@@ -42,29 +37,24 @@
       flex-shrink: 0;
       background-color: #f0f0f0;
     }
-
     .card-content {
       flex: 1;
     }
-
     .meta {
       color: #999;
       font-size: 0.75rem;
       margin-bottom: 0.25rem;
     }
-
     .title {
       font-weight: 600;
       font-size: 1rem;
       line-height: 1.4;
       margin: 0 0 0.3rem 0;
     }
-
     .title a {
       color: #111;
       text-decoration: none;
     }
-
     .summary {
       font-size: 0.9rem;
       color: #444;
@@ -88,70 +78,61 @@
     fetch(rssUrl)
       .then(response => response.json())
       .then(data => {
-        const articles = data.items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+        const articles = data.items || [];
 
-        const BATCH_SIZE = 10;
-        let offset = 0;
-
-        // Group articles by date label
+        // Group by formatted date
         const groups = {};
-        for (const item of articles) {
+        articles.forEach(item => {
           const pubDate = new Date(item.pubDate);
-          const today = new Date();
-          const diffTime = today - pubDate;
-          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-          let label;
-          if (diffDays === 0) label = "Today";
-          else if (diffDays === 1) label = "Yesterday";
-          else label = pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
+          const label = pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           if (!groups[label]) groups[label] = [];
           groups[label].push(item);
+        });
+
+        for (const label in groups) {
+          const heading = document.createElement("h3");
+          heading.textContent = label;
+          feedContainer.appendChild(heading);
+
+          for (const item of groups[label]) {
+            const card = document.createElement("div");
+            card.className = "card";
+
+            const img = document.createElement("img");
+            img.src = item.thumbnail || item.enclosure?.link || "https://via.placeholder.com/80x80?text=No+Image";
+            img.alt = "Image";
+
+            const content = document.createElement("div");
+            content.className = "card-content";
+
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            const pubDate = new Date(item.pubDate);
+            meta.textContent = `${item.author || item.source?.title || "Unknown"} · ${pubDate.toDateString()}`;
+
+            const title = document.createElement("div");
+            title.className = "title";
+            title.innerHTML = `<a href="${item.link}" target="_blank">${item.title}</a>`;
+
+            const summary = document.createElement("div");
+            summary.className = "summary";
+            summary.textContent = item.description.replace(/<[^>]*>/g, "").slice(0, 400);
+
+            content.appendChild(meta);
+            content.appendChild(title);
+            content.appendChild(summary);
+
+            card.appendChild(img);
+            card.appendChild(content);
+
+            feedContainer.appendChild(card);
+          }
         }
-
-        const orderedGroups = Object.keys(groups);
-        let currentGroupIndex = 0;
-
-        const btn = document.createElement("button");
-        btn.id = "loadMore";
-        btn.textContent = "Load More";
-        btn.style.display = "block";
-        btn.style.margin = "2rem auto";
-        btn.style.padding = "0.75rem 1.5rem";
-        btn.style.fontSize = "1rem";
-        btn.style.cursor = "pointer";
-        btn.onclick = renderBatch;
-        feedContainer.appendChild(btn);
-
-        function renderBatch() {
-          let count = 0;
-          while (currentGroupIndex < orderedGroups.length && count < BATCH_SIZE) {
-            const dateGroup = orderedGroups[currentGroupIndex];
-            const group = groups[dateGroup];
-
-            if (!group.rendered) {
-              const heading = document.createElement("h3");
-              heading.textContent = dateGroup;
-              feedContainer.appendChild(heading);
-              group.rendered = true;
-            }
-
-            while (group.length && count < BATCH_SIZE) {
-              const item = group.shift();
-              count++;
-
-              const card = document.createElement("div");
-              card.className = "card";
-
-              const img = document.createElement("img");
-              img.src = item.thumbnail || item.enclosure?.link || "https://via.placeholder.com/80x80?text=No+Image";
-              img.alt = "Image";
-
-              const content = document.createElement("div");
-              content.className = "card-content";
-
-              const meta = document.createElement("div");
-              meta.className = "meta";
-              const pubDate = new Date(item.pubDate);
-              meta.textContent = `${item.author || item.source?.title || "Unknown"} · ${pub
+      })
+      .catch(err => {
+        console.error("Feed load failed", err);
+        feedContainer.innerHTML = "<p>Could not load feed.</p>";
+      });
+  </script>
+</body>
+</html>
