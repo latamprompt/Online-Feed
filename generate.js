@@ -7,7 +7,13 @@ const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrU
 https.get(url, (res) => {
   const results = [];
   res.pipe(csv())
-    .on('data', (data) => results.push(data))
+  .on('data', (data) => {
+    console.log(Object.keys(data)); // 🔍 See column names being parsed
+    results.push(data);
+  })
+
+})
+
     .on('end', () => {
       const itemsHtml = results.map(row => {
         const title = row["Title"];
