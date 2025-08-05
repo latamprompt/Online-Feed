@@ -1,4 +1,4 @@
-name: Update LatAm Headlines Feed
+name: Update Online Feed
 
 on:
   schedule:
