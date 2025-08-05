@@ -5,13 +5,25 @@ const csv = require('csv-parser');
 // Replace this with your actual published CSV URL
 const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
 
-https.get(sheetUrl, (res) => {
-  const results = [];
-
+https.get(sheetUrl, res => {
+  res.setEncoding('utf8'); // <-- Ensure UTF-8 decoding
+  res.pipe(csv())
+    .on('data', (data) => {
+      console.log(Object.keys(data)); // Debug column names
+      results.push(data);
+    })
+    .on('end', () => {
+      const html = generateHtml(results);
+      fs.writeFileSync('index.html', html, 'utf8');
+      console.log('✅ index.html has been generated successfully.');
+    });
+});
+  
   res
     .pipe(csv())
     .on('data', (data) => {
       console.log(Object.keys(data)); // 🔍 Debug column names
+      console.log("🔍 Row title value:", data["Title"]);
       results.push(data);
     })
     .on('end', () => {
