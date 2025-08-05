@@ -5,6 +5,9 @@ on:
     - cron: '0 * * * *' # every hour
   workflow_dispatch:
   push:
+  
+permissions:
+  contents: write
 
 jobs:
   build:
