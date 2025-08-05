@@ -2,82 +2,83 @@ const fs = require('fs');
 const https = require('https');
 const csv = require('csv-parser');
 
-// Public CSV link from your Google Sheet
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
+const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
 
-const results = [];
-
-https.get(SHEET_URL, (res) => {
+https.get(url, (res) => {
+  const results = [];
   res.pipe(csv())
-    .on('data', (row) => results.push(row))
+    .on('data', (data) => results.push(data))
     .on('end', () => {
-      const html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>LatAm Headlines</title>
-  <link rel="icon" href="favicon.ico" />
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      background-color: #f9f9f9;
-      margin: 0;
-      padding: 2rem;
-      max-width: 800px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 2rem;
-      color: #333;
-    }
-    .story {
-      background: #fff;
-      padding: 1rem 1.25rem;
-      border-left: 4px solid #007acc;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .story h2 {
-      margin: 0 0 0.4rem 0;
-      font-size: 1.2rem;
-      line-height: 1.4;
-    }
-    .story h2 a {
-      text-decoration: none;
-      color: #007acc;
-    }
-    .story h2 a:hover {
-      text-decoration: underline;
-    }
-    .meta {
-      font-size: 0.85rem;
-      color: #666;
-      margin-bottom: 0.5rem;
-    }
-    .summary {
-      font-size: 0.95rem;
-      color: #333;
-    }
-  </style>
-</head>
-<body>
-  <h1>LatAm Headlines</h1>
-  ${results.map(item => `
-    <div class="story">
-      <h2><a href="${item.url}">${item.title}</a></h2>
-      <div class="meta">${item.source} &bull; ${item.date}</div>
-      <p class="summary">${item.summary}</p>
-    </div>
-  `).join('')}
-</body>
-</html>
-`;
+      const itemsHtml = results.map(row => {
+        const title = row["Title"];
+        const summary = row["Article Summary"];
+        const source = row["Source"];
+        const date = row["Publication Date"];
+        const link = row["URL"];
 
-      fs.writeFileSync('index.html', html.trim());
-      console.log('✅ index.html generated from Google Sheet');
+        if (!title || !link) return ''; // skip empty rows
+
+        return `
+          <div class="item">
+            <h3><a href="${link}" target="_blank">${title}</a></h3>
+            <p class="meta">${source} • ${date}</p>
+            <p>${summary}</p>
+          </div>
+        `;
+      }).join('\n');
+
+      const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <title>LatAm Headlines</title>
+          <style>
+            body {
+              font-family: system-ui, sans-serif;
+              background: #f9f9f9;
+              margin: 0;
+              padding: 2rem;
+            }
+            .feed {
+              max-width: 680px;
+              margin: auto;
+            }
+            .item {
+              background: #fff;
+              border-left: 4px solid #0077cc;
+              padding: 1rem;
+              margin-bottom: 1rem;
+              box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            }
+            h3 {
+              margin: 0 0 0.5rem;
+              font-size: 1.2rem;
+            }
+            h3 a {
+              color: #0077cc;
+              text-decoration: none;
+            }
+            .meta {
+              color: #777;
+              font-size: 0.9rem;
+              margin-bottom: 0.5rem;
+            }
+            p {
+              margin: 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="feed">
+            <h1>LatAm Headlines</h1>
+            ${itemsHtml}
+          </div>
+        </body>
+        </html>
+      `;
+
+      fs.writeFileSync('index.html', html);
+      console.log('✅ index.html generated');
     });
 });
