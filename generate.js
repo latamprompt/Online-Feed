@@ -3,7 +3,7 @@ const https = require('https');
 const csv = require('csv-parser');
 
 // 🔗 Paste your *published CSV URL* here:
-const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-.../pub?gid=...&single=true&output=csv';
+const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
 
 const results = [];
 
