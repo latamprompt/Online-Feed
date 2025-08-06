@@ -27,7 +27,6 @@ jobs:
 
       - name: Run generator script
         run: |
-          node generate.js
           node generate-rss.js
 
 
