@@ -10,9 +10,11 @@ const results = [];
 
 https.get(sheetUrl, (res) => {
   res.pipe(csv())
-    .on('data', (data) => {
-      results.push(data);
-    })
+.on('data', (data) => {
+  console.log('🔍 Row keys:', Object.keys(data));
+  console.log('🧪 Row title value:', data['Title']);
+  results.push(data);
+})
     .on('end', () => {
       const rssItems = results.map(row => {
         return `
