@@ -1,70 +1,87 @@
 const fs = require('fs');
-const { https } = require('follow-redirects');
+const https = require('follow-redirects').https;
 const csv = require('csv-parser');
+const { URL } = require('url');
 
-const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
-const results = [];
+// Replace with your public Google Sheet CSV export link
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/your-sheet-id/export?format=csv';
 
-https.get(sheetUrl, (res) => {
-  res.pipe(csv())
-    .on('data', (data) => {
-      const cleanedRow = {};
+const FEED_FILE = 'feed.xml';
+const FEED_TITLE = 'LatAm Headlines';
+const FEED_LINK = 'https://latamprompt.github.io/Online-Feed/';
+const FEED_DESCRIPTION = 'Latest Latin American news summaries';
+const FEED_LANGUAGE = 'en-us';
 
-      Object.keys(data).forEach(key => {
-        // Clean the header key
-        const cleanKey = key.trim();
+function getSourceName(articleUrl) {
+  try {
+    const hostname = new URL(articleUrl).hostname;
+    return hostname.replace('www.', '').split('.')[0]; // "theguardian", "nytimes", etc.
+  } catch {
+    return 'Unknown Source';
+  }
+}
 
-        // Clean the value (remove leading/trailing spaces and normalize characters)
-        const rawValue = data[key];
-        const cleanValue =
-          typeof rawValue === 'string'
-            ? rawValue
-                .trim()
-                .replace(/[“”]/g, '"')     // Replace smart quotes
-                .replace(/[‘’]/g, "'")     // Replace smart apostrophes
-                .replace(/\u00A0/g, ' ')   // Replace non-breaking space
-            : rawValue;
+function createRssItem({ title, link, description, pubDate, guid, image }) {
+  const source = getSourceName(link);
 
-        cleanedRow[cleanKey] = cleanValue;
-      });
+  const formattedDescription = `
+    <![CDATA[
+      ${image ? `<img src="${image}" alt="" style="max-width:600px;width:100%;height:auto;"><br/>` : ''}
+      <strong>Source:</strong> ${source}<br/>
+      ${description}
+    ]]>
+  `;
 
-      // Debug: print the cleaned row
-      console.log('🧪 Cleaned Row:', cleanedRow);
+  return `
+    <item>
+      <title>${title}</title>
+      <link>${link}</link>
+      <description>${formattedDescription}</description>
+      <pubDate>${pubDate}</pubDate>
+      <guid>${guid}</guid>
+    </item>
+  `;
+}
 
-      if (cleanedRow['Title']) {
-        console.log('✅ Row title value:', cleanedRow['Title']);
-        results.push(cleanedRow);
-      } else {
-        console.warn('⚠️ Skipping row: Missing or empty title', cleanedRow);
-      }
-    })
-    .on('end', () => {
-      const rssItems = results.map(row => {
-        // Escape ampersands in URL to ensure XML is valid
-        const safeLink = (row["URL"] || "").replace(/&/g, "&amp;");
+function generateRssFeed(items) {
+  const rssItems = items.map(createRssItem).join('\n');
 
-        return `
-<item>
-  <title><![CDATA[${row["Title"] || "No Title"}]]></title>
-  <link>${safeLink}</link>
-  <description><![CDATA[${row["Article Summary"] || ""}]]></description>
-  <pubDate>${row["Publication Date"] ? new Date(row["Publication Date"]).toUTCString() : new Date().toUTCString()}</pubDate>
-  <guid>${row["ID"] || row["URL"] || ""}</guid>
-</item>`;
-      }).join('');
-
-      const rssFeed = `<?xml version="1.0" encoding="UTF-8" ?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
 <channel>
-  <title>LatAm Headlines</title>
-  <link>https://latamprompt.github.io/Online-Feed/</link>
-  <description>Latest Latin American news summaries</description>
-  <language>en-us</language>
+  <title>${FEED_TITLE}</title>
+  <link>${FEED_LINK}</link>
+  <description>${FEED_DESCRIPTION}</description>
+  <language>${FEED_LANGUAGE}</language>
   ${rssItems}
 </channel>
 </rss>`;
+}
 
-      fs.writeFileSync('feed.xml', rssFeed, 'utf8');
-      console.log('✅ feed.xml has been generated.');
-    });
-});
+function fetchCsvAndGenerateFeed() {
+  const rows = [];
+
+  https.get(CSV_URL, (res) => {
+    res.pipe(csv())
+      .on('data', (row) => {
+        // Expecting CSV to have at least: title, link, description, pubDate, guid, image (optional)
+        rows.push({
+          title: row.title,
+          link: row.link,
+          description: row.description || '',
+          pubDate: row.pubDate || new Date().toUTCString(),
+          guid: row.guid || row.link,
+          image: row.image || '', // optional column in your Sheet
+        });
+      })
+      .on('end', () => {
+        const feed = generateRssFeed(rows);
+        fs.writeFileSync(FEED_FILE, feed, 'utf8');
+        console.log(`✅ RSS feed written to ${FEED_FILE}`);
+      });
+  }).on('error', (err) => {
+    console.error('⚠️ Error fetching CSV:', err);
+  });
+}
+
+fetchCsvAndGenerateFeed();
