@@ -1,24 +1,13 @@
 const fs = require('fs');
-const { https } = require('follow-redirects');
+const https = require('follow-redirects').https;
 const csv = require('csv-parser');
 
 const sheetUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv';
+
 const results = [];
 
-console.log(`🌐 Fetching: ${sheetUrl}`);
-
 https.get(sheetUrl, (res) => {
-  console.log(`🔗 Response status code: ${res.statusCode}`);
-  if (res.statusCode !== 200) {
-    console.error(`❌ Failed to fetch CSV. Status: ${res.statusCode}`);
-    res.resume(); // drain stream
-    return;
-  }
-
   res.pipe(csv())
-    .on('headers', (headers) => {
-      console.log(`🧾 CSV Headers: ${headers.map(h => `"${h}"`).join(', ')}`);
-    })
     .on('data', (data) => {
       const cleanedRow = {};
 
@@ -32,35 +21,35 @@ https.get(sheetUrl, (res) => {
                 .replace(/[“”]/g, '"')
                 .replace(/[‘’]/g, "'")
                 .replace(/\u00A0/g, ' ')
+                .replace(/&(?!(amp|lt|gt|quot|apos);)/g, '&amp;')
             : rawValue;
+
         cleanedRow[cleanKey] = cleanValue;
       });
 
-      // Show key info per row
+      console.log('🧪 Cleaned Row:', cleanedRow);
+
       if (cleanedRow['Title']) {
-        console.log(`✅ Row: ${cleanedRow['Title'].slice(0, 50)}...`);
+        console.log('✅ Row title value:', cleanedRow['Title']);
         results.push(cleanedRow);
       } else {
-        console.warn('⚠️ Skipping row — no title:', cleanedRow);
+        console.warn('⚠️ Skipping row: Missing or empty title', cleanedRow);
       }
     })
     .on('end', () => {
-      console.log(`📊 Total valid rows: ${results.length}`);
-
-      if (results.length === 0) {
-        console.error('❌ No valid rows found. Exiting.');
-        return;
-      }
-
       const rssItems = results.map(row => {
-        const safeLink = (row["URL"] || "").replace(/&/g, "&amp;");
+        const title = `${row["Source"] ? `[${row["Source"]}] ` : ''}${row["Title"] || "No Title"}`;
+        const pubDate = row["Publication Date"] ? new Date(row["Publication Date"]).toUTCString() : new Date().toUTCString();
+        const image = row["Image"] || "";
+
         return `
 <item>
-  <title><![CDATA[${row["Title"] || "No Title"}]]></title>
-  <link>${safeLink}</link>
-  <description><![CDATA[${row["Article Summary"] || ""}]]></description>
-  <pubDate>${row["Publication Date"] ? new Date(row["Publication Date"]).toUTCString() : new Date().toUTCString()}</pubDate>
+  <title><![CDATA[${title}]]></title>
+  <link>${row["URL"] || ""}</link>
+  <description><![CDATA[<img src="${image}" width="600"/><br/>${row["Article Summary"] || ""}]]></description>
+  <pubDate>${pubDate}</pubDate>
   <guid>${row["ID"] || row["URL"] || ""}</guid>
+  ${image ? `<enclosure url="${image}" type="image/jpeg" />` : ""}
 </item>`;
       }).join('');
 
@@ -76,8 +65,6 @@ https.get(sheetUrl, (res) => {
 </rss>`;
 
       fs.writeFileSync('feed.xml', rssFeed, 'utf8');
-      console.log('✅ feed.xml written successfully');
+      console.log('✅ feed.xml has been generated.');
     });
-}).on('error', (err) => {
-  console.error('💥 Request error:', err);
 });
