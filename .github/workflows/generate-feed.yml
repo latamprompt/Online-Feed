@@ -1,36 +1,48 @@
-name: Generate RSS Feed
+name: Generate feed (manual/push)
 
 on:
   push:
-    branches:
-      - main
-  schedule:
-    - cron: '0 * * * *' # every hour
+    branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write   # needed to commit feed.xml back to the repo
+
+concurrency:
+  group: generate-feed
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Use Node 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Show workspace (debug)
+        run: ls -la
 
-      - name: Run RSS generator
-        run: node generate-rss.js
+      - name: Build RSS from Google Sheets
+        run: node generate-rss.js --in "${{ secrets.FEED_CSV_URL }}" --out feed.xml
 
-      - name: Commit and push updated feed.xml only
+      - name: Commit feed.xml
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add feed.xml || echo "No feed.xml to add"
-          git commit -m "Auto-update RSS feed [skip ci]" || echo "No changes to commit"
-          git push
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add feed.xml
+          git commit -m "chore: auto-build RSS (manual/push)" || echo "No changes to commit"
+
+      - name: Push changes
+        run: git push
+
+      - name: Upload feed.xml artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-xml
+          path: feed.xml
