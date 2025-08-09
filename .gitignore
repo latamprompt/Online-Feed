@@ -16,3 +16,7 @@ pids
 # Optional: Ignore lockfile from workflow automation (but keep in dev)
 package-lock.json
 
+Feed.csv 
+Feed.csv
+*.csv
+generate-rss-legacy.js
