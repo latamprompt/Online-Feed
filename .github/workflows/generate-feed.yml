@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to commit feed.xml back to the repo
+  contents: write  # needed to commit feed.xml back to the repo
 
 concurrency:
   group: generate-feed
@@ -25,11 +25,22 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Show workspace (debug)
         run: ls -la
 
       - name: Build RSS from Google Sheets
-        run: node generate-rss.js --in "${{ secrets.FEED_CSV_URL }}" --out feed.xml
+        run: |
+          node generate-rss.js \
+            --in "${{ secrets.FEED_CSV_URL }}" \
+            --out feed.xml \
+            --title "LatAm Online" \
+            --site "https://latamprompt.github.io/Online-Feed/" \
+            --feed "https://latamprompt.github.io/Online-Feed/feed.xml" \
+            --desc "Latest posts" \
+            --validate-xml
 
       - name: Commit feed.xml
         run: |
