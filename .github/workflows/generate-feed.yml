@@ -31,6 +31,21 @@ jobs:
       - name: Show workspace (debug)
         run: ls -la
 
+      # --- Debug the incoming CSV ---
+      - name: Peek CSV (first lines)
+        run: |
+          curl -fsSL "${{ secrets.FEED_CSV_URL }}" | head -n 10 || true
+
+      - name: Download CSV for debugging
+        run: curl -fsSL "${{ secrets.FEED_CSV_URL }}" -o debug.csv
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: csv-debug
+          path: debug.csv
+      # --- End CSV debug ---
+
       - name: Build RSS from Google Sheets
         run: |
           node generate-rss.js \
@@ -41,6 +56,13 @@ jobs:
             --feed "https://latamprompt.github.io/Online-Feed/feed.xml" \
             --desc "Latest posts" \
             --validate-xml
+
+      # Optional: fail fast if no items so it's obvious in CI
+      - name: Fail if feed has no items
+        run: |
+          if ! grep -q "<item>" feed.xml; then
+            echo "Feed has 0 items"; cat feed.xml; exit 1;
+          fi
 
       - name: Commit feed.xml
         run: |
