@@ -1,191 +1,294 @@
 #!/usr/bin/env node
 /**
- * Generate RSS feed from a CSV exported from Google Sheets.
- * Expected CSV headers:
- * Title,Image,URL,Source,Publication Date,Article Summary,ID,Domain
+ * generate-rss.js
+ *
+ * Reads a CSV (local file path OR https URL) and generates an RSS 2.0 feed.
+ * - Parses multiline quoted fields (csv-parse/sync)
+ * - Validates rows; skips bad ones with logs
+ * - Ensures <link>/<guid> are absolute URLs with no newlines/whitespace
+ * - Preserves multiline summaries via CDATA
+ * - Optional XML validation in dev (fast-xml-parser if installed)
  *
  * Usage:
- *   node generate-rss.js --in feed.csv --out feed.xml
- * Defaults:
- *   input: ./feed.csv
- *   output: ./feed.xml
+ *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
+ *   node generate-rss.js --in "https://docs.google.com/.../pub?gid=123&single=true&output=csv" --out feed.xml ...
  */
 
 const fs = require('fs');
 const path = require('path');
+const { parse } = require('csv-parse/sync');
 
+// -----------------------------
+// CLI args
+// -----------------------------
 const args = process.argv.slice(2);
-function getArg(flag, fallback) {
-  const i = args.indexOf(flag);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+function argVal(name, fallback = '') {
+  const i = args.indexOf(`--${name}`);
+  return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
+}
+function hasFlag(name) {
+  return args.includes(`--${name}`);
 }
 
-const INPUT = getArg('--in', 'feed.csv');
-const OUTPUT = getArg('--out', 'feed.xml');
+const IN_ARG    = argVal('in');
+const OUT_PATH  = argVal('out', '');
+const FEED_TITLE= argVal('title', 'Feed');
+const SITE_LINK = argVal('site', '');
+const FEED_LINK = argVal('feed', '');
+const FEED_DESC = argVal('desc', '');
+const LIMIT     = parseInt(argVal('limit', '0'), 10) || 0;
+const VALIDATE_XML = hasFlag('validate-xml');
 
-// --- Helpers ---------------------------------------------------------------
+// -----------------------------
+// Helpers: URL vs file, fetch with retry
+// -----------------------------
+function isHttpUrl(s) {
+  return typeof s === 'string' && /^https?:\/\//i.test(s.trim());
+}
+function ensureSheetsCsv(url) {
+  if (!/docs\.google\.com\/spreadsheets/i.test(url)) return url;
+  if (/[\?&]output=csv\b/i.test(url)) return url;
+  return url.includes('?') ? `${url}&output=csv` : `${url}?output=csv`;
+}
+async function fetchText(url, { timeoutMs = 20000, retries = 2 } = {}) {
+  // Node 18+ has global fetch
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
 
-function escapeXML(str) {
-  // Escape for element text nodes.
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')  // must be first
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    return await res.text();
+  } catch (err) {
+    if (retries > 0) {
+      return fetchText(url, { timeoutMs: timeoutMs * 1.5, retries: retries - 1 });
+    }
+    throw err;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+async function readInputToString(input) {
+  if (isHttpUrl(input)) {
+    const url = ensureSheetsCsv(input.trim());
+    return await fetchText(url);
+  }
+  // local file path
+  return fs.readFileSync(input, 'utf8');
+}
+
+// -----------------------------
+// CSV parsing
+// -----------------------------
+function detectDelimiter(firstLine) {
+  return (firstLine.includes('\t') && !firstLine.includes(',')) ? '\t' : ',';
 }
 
 function parseCSV(raw) {
-  // Simple CSV parser that handles basic quoted fields.
-  // For complex CSV, replace with 'csv-parse', but this keeps us dependency-free.
-  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim().length);
-  if (lines.length === 0) return { headers: [], rows: [] };
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const firstLine = normalized.split('\n')[0] || '';
+  const delimiter = detectDelimiter(firstLine);
 
-  const headers = splitCSVLine(lines[0]);
-  const rows = lines.slice(1).map(line => {
-    const cols = splitCSVLine(line);
-    const obj = {};
-    headers.forEach((h, idx) => (obj[h.trim()] = cols[idx] ?? ''));
-    return obj;
+  const records = parse(normalized, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    delimiter,
+    bom: true,
+    relax_column_count: true,
+    relax_quotes: true,
+    record_delimiter: ['\n', '\r', '\r\n'],
   });
-  return { headers, rows };
+
+  const headers = records.length ? Object.keys(records[0]) : [];
+  return { headers, rows: records };
 }
 
-function splitCSVLine(line) {
-  const out = [];
-  let buf = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { // escaped quote
-        buf += '"'; i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        buf += ch;
-      }
-    } else {
-      if (ch === ',') {
-        out.push(buf);
-        buf = '';
-      } else if (ch === '"') {
-        inQuotes = true;
-      } else {
-        buf += ch;
-      }
-    }
+// -----------------------------
+// Validation & sanitizing
+// -----------------------------
+function sanitizeUrl(u) {
+  if (typeof u !== 'string') return '';
+  const cleaned = u.replace(/[\r\n]/g, '').replace(/\s+/g, '');
+  return cleaned.trim();
+}
+function validAbsUrl(u) {
+  const s = sanitizeUrl(u);
+  if (!/^https?:\/\//i.test(s)) return false;
+  try { new URL(s); return true; } catch { return false; }
+}
+function pick(obj, keys) {
+  for (const k of keys) {
+    if (obj[k] != null && String(obj[k]).trim() !== '') return String(obj[k]);
   }
-  out.push(buf);
-  return out;
+  return '';
+}
+function validateRecord(rec) {
+  const lower = {};
+  for (const k of Object.keys(rec)) lower[k.toLowerCase()] = rec[k];
+
+  const title = (pick(lower, ['title']) || '').trim();
+  const link  = sanitizeUrl(pick(lower, ['link', 'url']));
+  const guid0 = sanitizeUrl(pick(lower, ['guid', 'id'])) || link;
+  const date0 = (pick(lower, ['pubdate', 'date']) || '').trim();
+  const desc  = pick(lower, ['summary', 'description']) || '';
+
+  const errors = [];
+  if (!title) errors.push('missing title');
+  if (!validAbsUrl(link)) errors.push('invalid link');
+  if (!validAbsUrl(guid0)) errors.push('invalid guid');
+  if (date0 && isNaN(new Date(date0).getTime())) errors.push('bad pubDate');
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    normalized: { title, link, guid: guid0, pubDate: date0, description: desc },
+    original: rec,
+  };
 }
 
-function toRfc822Date(dateStr) {
-  // Accepts ISO-like or mm/dd/yyyy from Sheets, returns RFC-822 for RSS.
-  // If parsing fails, omit pubDate.
-  if (!dateStr) return null;
-  // Try native Date parsing; also try US-style mm/dd/yyyy
-  let d = new Date(dateStr);
-  if (isNaN(d)) {
-    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(dateStr).trim());
-    if (m) {
-      d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
-    }
-  }
-  if (isNaN(d)) return null;
-  return d.toUTCString(); // acceptable for RSS <pubDate>
-}
-
-function inferMimeFromUrl(url) {
-  if (!url) return null;
-  const u = url.toLowerCase();
-  if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'image/jpeg';
-  if (u.endsWith('.png')) return 'image/png';
-  if (u.endsWith('.webp')) return 'image/webp';
-  if (u.endsWith('.gif')) return 'image/gif';
-  return null; // let readers fetch without type if unknown
-}
-
-// --- Build ----------------------------------------------------------------
-
-function buildRSS(rows) {
-  const title = 'LatAm Headlines';
-  const link = 'https://latamprompt.github.io/Online-Feed/';
-  const description = 'Latest Latin American news summaries';
-  const language = 'en-us';
-
-  let items = '';
+function prepareItems(rows, { onSkip = () => {} } = {}) {
+  const seen = new Set();
+  const items = [];
 
   for (const r of rows) {
-    const t = (r['Title'] || '').toString();
-    const img = (r['Image'] || '').toString();
-    const url = (r['URL'] || '').toString();
-    const src = (r['Source'] || '').toString();
-    const pub = (r['Publication Date'] || '').toString();
-    const sum = (r['Article Summary'] || '').toString();
-    const id = (r['ID'] || '').toString();
-    // const domain = (r['Domain'] || '').toString(); // unused but available
+    const v = validateRecord(r);
+    if (!v.ok) { onSkip({ row: r, reason: v.errors.join('; ') }); continue; }
 
-    const pubDate = toRfc822Date(pub);
-    const guid = id || url || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const guidKey = v.normalized.guid.toLowerCase();
+    if (seen.has(guidKey)) { onSkip({ row: r, reason: 'duplicate guid' }); continue; }
+    seen.add(guidKey);
 
-    // Description: headline again with a link + summary (your earlier preference)
-    const descHtml =
-      `<p><strong>${escapeXML(t)}</strong> — ${escapeXML(src)}</p>` +
-      (sum ? `<p>${escapeXML(sum)}</p>` : '') +
-      (url ? `<p><a href="${escapeXML(url)}">Read more</a></p>` : '');
+    const date = v.normalized.pubDate ? new Date(v.normalized.pubDate) : new Date();
 
-    let item = '  <item>\n';
-    item += `    <title>${escapeXML(t)}${src ? ' — ' + escapeXML(src) : ''}</title>\n`;
-    if (url) item += `    <link>${escapeXML(url)}</link>\n`;
-    if (pubDate) item += `    <pubDate>${escapeXML(pubDate)}</pubDate>\n`;
-    item += `    <guid isPermaLink="${url ? 'true' : 'false'}">${escapeXML(guid)}</guid>\n`;
-    item += `    <description><![CDATA[${descHtml}]]></description>\n`;
-
-    if (img) {
-      const mime = inferMimeFromUrl(img);
-      // enclosure must use attributes; still escape attribute values
-      if (mime) {
-        item += `    <enclosure url="${escapeXML(img)}" type="${escapeXML(mime)}" />\n`;
-      } else {
-        // Fallback: include image in description only (already handled via HTML if you want)
-        // Or add a media:thumbnail if you later add namespaces.
-      }
-    }
-
-    item += '  </item>\n';
-    items += item;
+    items.push({
+      title: v.normalized.title,
+      link: v.normalized.link,
+      guid: v.normalized.guid,
+      pubDate: isNaN(date.getTime()) ? new Date() : date,
+      description: v.normalized.description,
+    });
   }
 
-  const xml =
-`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-<channel>
-  <title>${escapeXML(title)}</title>
-  <link>${escapeXML(link)}</link>
-  <description>${escapeXML(description)}</description>
-  <language>${escapeXML(language)}</language>
-${items}</channel>
-</rss>
-`;
+  items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  return LIMIT > 0 ? items.slice(0, LIMIT) : items;
+}
+
+// -----------------------------
+// XML helpers
+// -----------------------------
+function noNL(s) { return typeof s === 'string' ? s.replace(/[\r\n]/g, '') : s; }
+function escapeXML(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function cdata(s) {
+  if (s == null || s === '') return '';
+  return `<![CDATA[${String(s).replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
+}
+function rfc822(date) { return date.toUTCString(); }
+
+function buildRSS({ items, channel }) {
+  const now = new Date();
+  let xml = '';
+  xml += `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
+  xml += `  <channel>\n`;
+  xml += `    <title>${escapeXML(channel.title || 'Feed')}</title>\n`;
+  if (channel.link) xml += `    <link>${noNL(channel.link)}</link>\n`;
+  if (channel.description) xml += `    <description>${escapeXML(channel.description)}</description>\n`;
+  if (channel.language) xml += `    <language>${escapeXML(channel.language)}</language>\n`;
+  if (channel.ttl) xml += `    <ttl>${String(channel.ttl)}</ttl>\n`;
+  xml += `    <lastBuildDate>${rfc822(now)}</lastBuildDate>\n`;
+  if (channel.self) {
+    xml += `    <atom:link href="${noNL(channel.self)}" rel="self" type="application/rss+xml"/>\n`;
+  }
+
+  for (const it of items) {
+    const link = noNL(it.link);
+    const guid = noNL(it.guid);
+    xml += `    <item>\n`;
+    xml += `      <title>${escapeXML(it.title)}</title>\n`;
+    xml += `      <link>${link}</link>\n`;
+    xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${guid}</guid>\n`;
+    xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n`;
+    if ((it.description || '').trim() !== '') {
+      xml += `      <description>${cdata(it.description)}</description>\n`;
+    }
+    xml += `    </item>\n`;
+  }
+
+  xml += `  </channel>\n`;
+  xml += `</rss>\n`;
   return xml;
 }
 
-// --- Main -----------------------------------------------------------------
+// -----------------------------
+// Optional XML validation
+// -----------------------------
+function tryValidateXml(xml) {
+  if (!VALIDATE_XML) return;
+  try {
+    const { XMLValidator } = require('fast-xml-parser');
+    const res = XMLValidator.validate(xml, { allowBooleanAttributes: true });
+    if (res !== true) {
+      const errMsg = typeof res === 'object' ? JSON.stringify(res, null, 2) : String(res);
+      throw new Error(`Invalid RSS XML: ${errMsg}`);
+    }
+  } catch (err) {
+    if (err && /Cannot find module 'fast-xml-parser'/.test(String(err))) {
+      console.warn('[rss] XML validation skipped (fast-xml-parser not installed).');
+    } else if (VALIDATE_XML) {
+      throw err;
+    }
+  }
+}
 
-(function main() {
-  const csvPath = path.resolve(process.cwd(), INPUT);
-  if (!fs.existsSync(csvPath)) {
-    console.error(`Input CSV not found: ${csvPath}`);
+// -----------------------------
+// Main
+// -----------------------------
+async function main() {
+  if (!IN_ARG) {
+    console.error('Usage: node generate-rss.js --in <csv file or https URL> [--out feed.xml] [--title "Title"] [--site "https://example.com"] [--feed "https://example.com/feed.xml"] [--desc "Description"] [--limit N] [--validate-xml]');
     process.exit(1);
   }
-  const raw = fs.readFileSync(csvPath, 'utf8');
+
+  const raw = await readInputToString(IN_ARG).catch(err => {
+    console.error(`[rss] failed to read input (${IN_ARG}):`, err && err.message ? err.message : err);
+    process.exit(1);
+  });
+
   const { rows } = parseCSV(raw);
 
-  const xml = buildRSS(rows);
+  const items = prepareItems(rows, {
+    onSkip: ({ reason, row }) => {
+      const t = (row.title || row.Title || '').toString().slice(0, 80);
+      console.warn(`[rss] skipped row (${reason})${t ? ` — "${t}"` : ''}`);
+    }
+  });
 
-  const outPath = path.resolve(process.cwd(), OUTPUT);
-  fs.writeFileSync(outPath, xml, 'utf8');
-  console.log(`✅ RSS written to ${outPath} (${rows.length} items)`);
-})();
+  const channel = {
+    title: FEED_TITLE,
+    link: SITE_LINK ? noNL(SITE_LINK) : '',
+    self: FEED_LINK ? noNL(FEED_LINK) : '',
+    description: FEED_DESC,
+    language: 'en',
+    ttl: 15,
+  };
+
+  const xml = buildRSS({ items, channel });
+  tryValidateXml(xml);
+
+  if (OUT_PATH) {
+    fs.writeFileSync(OUT_PATH, xml, 'utf8');
+    console.log(`[rss] wrote ${items.length} items to ${path.resolve(OUT_PATH)}`);
+  } else {
+    process.stdout.write(xml);
+  }
+}
+
+main().catch(err => {
+  console.error('[rss] fatal:', err && err.stack ? err.stack : err);
+  process.exit(1);
+});
