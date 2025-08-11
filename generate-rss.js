@@ -2,12 +2,16 @@
 /**
  * generate-rss.js
  *
- * - Accepts --in as a local file path OR an https URL (auto-adds output=csv for Google Sheets)
- * - Parses multiline CSV fields via csv-parse/sync
- * - Validates rows; ensures absolute URLs; strips newlines from <link>/<guid>
- * - Uses guid/id ONLY if it's a valid URL; otherwise falls back to link
- * - Accepts "summary"/"description" OR "Article Summary" for item description
- * - Optional --validate-xml using fast-xml-parser (if installed)
+ * Reads a CSV (local file path OR https URL) and generates an RSS 2.0 feed.
+ * - Parses multiline quoted fields (csv-parse/sync)
+ * - Validates rows; skips bad ones with logs
+ * - Ensures <link>/<guid> are absolute URLs with no newlines/whitespace
+ * - Preserves multiline summaries via CDATA
+ * - Optional XML validation in dev (fast-xml-parser if installed)
+ *
+ * Usage:
+ *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
+ *   node generate-rss.js --in "https://docs.google.com/...&output=csv" --out feed.xml ...
  */
 
 const fs = require('fs');
@@ -19,20 +23,20 @@ const { parse } = require('csv-parse/sync');
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
-  const i = args.indexOf(--${name});
+  const i = args.indexOf(`--${name}`);
   return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
 }
 function hasFlag(name) {
-  return args.includes(--${name});
+  return args.includes(`--${name}`);
 }
 
-const IN_ARG       = argVal('in');
-const OUT_PATH     = argVal('out', '');
-const FEED_TITLE   = argVal('title', 'Feed');
-const SITE_LINK    = argVal('site', '');
-const FEED_LINK    = argVal('feed', '');
-const FEED_DESC    = argVal('desc', '');
-const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
+const IN_ARG     = argVal('in');
+const OUT_PATH   = argVal('out', '');
+const FEED_TITLE = argVal('title', 'Feed');
+const SITE_LINK  = argVal('site', '');
+const FEED_LINK  = argVal('feed', '');
+const FEED_DESC  = argVal('desc', '');
+const LIMIT      = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
 // -----------------------------
@@ -43,20 +47,20 @@ function isHttpUrl(s) {
 }
 function normalizeMaybeUrl(s) {
   if (typeof s !== 'string') return s;
-  // Fix http:/ or https:/ -> http:// or https://
+  // Fix http:/ or https:/ -> http:// or https:// (common typo)
   return s.trim().replace(/^(https?:)\/(?!\/)/i, '$1//');
 }
 function ensureSheetsCsv(url) {
   if (!/docs\.google\.com\/spreadsheets/i.test(url)) return url;
   if (/[\?&]output=csv\b/i.test(url)) return url;
-  return url.includes('?') ? ${url}&output=csv : ${url}?output=csv;
+  return url.includes('?') ? `${url}&output=csv` : `${url}?output=csv`;
 }
 async function fetchText(url, { timeoutMs = 20000, retries = 2 } = {}) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { redirect: 'follow', signal: controller.signal });
-    if (!res.ok) throw new Error(HTTP ${res.status} ${res.statusText});
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     return await res.text();
   } catch (err) {
     if (retries > 0) return fetchText(url, { timeoutMs: timeoutMs * 1.5, retries: retries - 1 });
@@ -117,6 +121,7 @@ function pick(obj, keys) {
   return '';
 }
 
+// IMPORTANT: GUID fix + Article Summary mapping here
 function validateRecord(rec) {
   const lower = {};
   for (const k of Object.keys(rec)) lower[k.toLowerCase()] = rec[k];
@@ -124,15 +129,18 @@ function validateRecord(rec) {
   const title = (pick(lower, ['title']) || '').trim();
   const link  = sanitizeUrl(pick(lower, ['link', 'url']));
 
-  // Only use guid/id if it's a valid absolute URL; else fall back to link
+  // Use guid/id only if it's a valid absolute URL; otherwise fall back to link
   const guidField = sanitizeUrl(pick(lower, ['guid', 'id']));
   const guid0 = validAbsUrl(guidField) ? guidField : link;
 
-  // Date is optional; Sheet often uses another header ("Publication Date"); that's fine
+  // Date is optional (sheet often uses "Publication Date", which we don't hard-require)
   const date0 = (pick(lower, ['pubdate', 'date']) || '').trim();
 
-  // Description: prefer summary/description; fallback to "Article Summary"
-  const desc = pick(lower, ['summary', 'description']) || lower['article summary'] || '';
+  // Description: prefer summary/description; fall back to "Article Summary"
+  const desc =
+    pick(lower, ['summary', 'description']) ||
+    lower['article summary'] ||
+    '';
 
   const errors = [];
   if (!title) errors.push('missing title');
@@ -185,15 +193,15 @@ function escapeXML(s) {
 }
 function cdata(s) {
   if (s == null || s === '') return '';
-  return <![CDATA[${String(s).replace(/]]>/g, ']]]]><![CDATA[>')}]]>;
+  return `<![CDATA[${String(s).replace(/]]>/g, ']]]]><![CDATA[>')}]]>`;
 }
 function rfc822(date) { return date.toUTCString(); }
 
 function buildRSS({ items, channel }) {
   const now = new Date();
   let xml = '';
-  xml += <?xml version="1.0" encoding="UTF-8"?>\n;
-  xml += <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n;
+  xml += `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
   xml += `  <channel>\n`;
   xml += `    <title>${escapeXML(channel.title || 'Feed')}</title>\n`;
   if (channel.link) xml += `    <link>${noNL(channel.link)}</link>\n`;
@@ -212,7 +220,7 @@ function buildRSS({ items, channel }) {
     xml += `      <title>${escapeXML(it.title)}</title>\n`;
     xml += `      <link>${link}</link>\n`;
     xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${guid}</guid>\n`;
-    xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n>`;
+    xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n`;
     if ((it.description || '').trim() !== '') {
       xml += `      <description>${cdata(it.description)}</description>\n`;
     }
@@ -220,7 +228,7 @@ function buildRSS({ items, channel }) {
   }
 
   xml += `  </channel>\n`;
-  xml += </rss>\n;
+  xml += `</rss>\n`;
   return xml;
 }
 
@@ -234,7 +242,7 @@ function tryValidateXml(xml) {
     const res = XMLValidator.validate(xml, { allowBooleanAttributes: true });
     if (res !== true) {
       const errMsg = typeof res === 'object' ? JSON.stringify(res, null, 2) : String(res);
-      throw new Error(Invalid RSS XML: ${errMsg});
+      throw new Error(`Invalid RSS XML: ${errMsg}`);
     }
   } catch (err) {
     if (err && /Cannot find module 'fast-xml-parser'/.test(String(err))) {
@@ -255,7 +263,7 @@ async function main() {
   }
 
   const raw = await readInputToString(IN_ARG).catch(err => {
-    console.error([rss] failed to read input (${IN_ARG}):, err && err.message ? err.message : err);
+    console.error(`[rss] failed to read input (${IN_ARG}):`, err && err.message ? err.message : err);
     process.exit(1);
   });
 
@@ -264,11 +272,11 @@ async function main() {
   const items = prepareItems(rows, {
     onSkip: ({ reason, row }) => {
       const t = (row.title || row.Title || '').toString().slice(0, 80);
-      console.warn([rss] skipped row (${reason})${t ? ` — "${t}" : ''}`);
+      console.warn(`[rss] skipped row (${reason})${t ? ` — "${t}"` : ''}`);
     }
   });
 
-  console.log([rss] parsed ${rows.length} rows; emitting ${items.length} items);
+  console.log(`[rss] parsed ${rows.length} rows; emitting ${items.length} items`);
 
   const channel = {
     title: FEED_TITLE,
@@ -284,7 +292,7 @@ async function main() {
 
   if (OUT_PATH) {
     fs.writeFileSync(OUT_PATH, xml, 'utf8');
-    console.log([rss] wrote ${items.length} items to ${path.resolve(OUT_PATH)});
+    console.log(`[rss] wrote ${items.length} items to ${path.resolve(OUT_PATH)}`);
   } else {
     process.stdout.write(xml);
   }
