@@ -13,20 +13,21 @@
  *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
  *   node generate-rss.js --in "https://docs.google.com/...&output=csv" --out feed.xml ...
  */
-
+  
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse/sync');
+
 // -----------------------------
-// CLI args
+// CLI args  (FIXED)
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
-  const i = args.indexOf(--${name});
+  const i = args.indexOf('--${name}');
   return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
 }
 function hasFlag(name) {
-  return args.includes(--${name});
+  return args.includes('--${name}');
 }
 
 const IN_ARG       = argVal('in');
@@ -37,6 +38,7 @@ const FEED_LINK    = argVal('feed', '');
 const FEED_DESC    = argVal('desc', '');
 const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
+
 
 // -----------------------------
 // URL/file helpers
