@@ -23,7 +23,7 @@ const { parse } = require('csv-parse/sync');
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
-  const i = args.indexOf(--${name});
+  const i = args.indexOf(`--${name}`);
   return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
 }
 function hasFlag(name) {
