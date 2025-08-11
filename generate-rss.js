@@ -11,7 +11,7 @@
  *
  * Usage:
  *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
- *   node generate-rss.js --in "https://docs.google.com/...&output=csv" --out feed.xml ...
+ *   node generate-rss.js --in "https://docs.google.com/.../pub?gid=123&single=true&output=csv" --out feed.xml ...
  */
 
 const fs = require('fs');
@@ -30,25 +30,20 @@ function hasFlag(name) {
   return args.includes(`--${name}`);
 }
 
-const IN_ARG     = argVal('in');
-const OUT_PATH   = argVal('out', '');
-const FEED_TITLE = argVal('title', 'Feed');
-const SITE_LINK  = argVal('site', '');
-const FEED_LINK  = argVal('feed', '');
-const FEED_DESC  = argVal('desc', '');
-const LIMIT      = parseInt(argVal('limit', '0'), 10) || 0;
+const IN_ARG    = argVal('in');
+const OUT_PATH  = argVal('out', '');
+const FEED_TITLE= argVal('title', 'Feed');
+const SITE_LINK = argVal('site', '');
+const FEED_LINK = argVal('feed', '');
+const FEED_DESC = argVal('desc', '');
+const LIMIT     = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
 // -----------------------------
-// URL/file helpers
+// Helpers: URL vs file, fetch with retry
 // -----------------------------
 function isHttpUrl(s) {
   return typeof s === 'string' && /^https?:\/\//i.test(s.trim());
-}
-function normalizeMaybeUrl(s) {
-  if (typeof s !== 'string') return s;
-  // Fix http:/ or https:/ -> http:// or https://
-  return s.trim().replace(/^(https?:)\/(?!\/)/i, '$1//');
 }
 function ensureSheetsCsv(url) {
   if (!/docs\.google\.com\/spreadsheets/i.test(url)) return url;
@@ -56,23 +51,31 @@ function ensureSheetsCsv(url) {
   return url.includes('?') ? `${url}&output=csv` : `${url}?output=csv`;
 }
 async function fetchText(url, { timeoutMs = 20000, retries = 2 } = {}) {
+  // Node 18+ has global fetch
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch(url, { redirect: 'follow', signal: controller.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     return await res.text();
   } catch (err) {
-    if (retries > 0) return fetchText(url, { timeoutMs: timeoutMs * 1.5, retries: retries - 1 });
+    if (retries > 0) {
+      return fetchText(url, { timeoutMs: timeoutMs * 1.5, retries: retries - 1 });
+    }
     throw err;
   } finally {
     clearTimeout(t);
   }
 }
+
 async function readInputToString(input) {
-  const maybe = normalizeMaybeUrl(input);
-  if (isHttpUrl(maybe)) return fetchText(ensureSheetsCsv(maybe));
-  return fs.readFileSync(maybe, 'utf8');
+  if (isHttpUrl(input)) {
+    const url = ensureSheetsCsv(input.trim());
+    return await fetchText(url);
+  }
+  // local file path
+  return fs.readFileSync(input, 'utf8');
 }
 
 // -----------------------------
@@ -81,6 +84,7 @@ async function readInputToString(input) {
 function detectDelimiter(firstLine) {
   return (firstLine.includes('\t') && !firstLine.includes(',')) ? '\t' : ',';
 }
+
 function parseCSV(raw) {
   const normalized = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const firstLine = normalized.split('\n')[0] || '';
@@ -143,6 +147,7 @@ function validateRecord(rec) {
     original: rec,
   };
 }
+
 function prepareItems(rows, { onSkip = () => {} } = {}) {
   const seen = new Set();
   const items = [];

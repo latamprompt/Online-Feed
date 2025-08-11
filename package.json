@@ -1,7 +1,6 @@
 {
   "dependencies": {
-    "csv-parser": "^3.2.0",
-    "follow-redirects": "^1.15.11"
+    "csv-parse": "^6.1.0"
   },
   "name": "brian-ellsworth",
   "version": "1.0.0",
@@ -20,5 +19,8 @@
   "bugs": {
     "url": "https://github.com/latamprompt/Online-Feed/issues"
   },
-  "homepage": "https://github.com/latamprompt/Online-Feed#readme"
+  "homepage": "https://github.com/latamprompt/Online-Feed#readme",
+  "devDependencies": {
+    "fast-xml-parser": "^5.2.5"
+  }
 }
