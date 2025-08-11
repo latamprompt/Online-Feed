@@ -1,191 +1,59 @@
-#!/usr/bin/env node
-/**
- * Generate RSS feed from a CSV exported from Google Sheets.
- * Expected CSV headers:
- * Title,Image,URL,Source,Publication Date,Article Summary,ID,Domain
- *
- * Usage:
- *   node generate-rss.js --in feed.csv --out feed.xml
- * Defaults:
- *   input: ./feed.csv
- *   output: ./feed.xml
- */
+name: Generate feed (manual/push)
 
-const fs = require('fs');
-const path = require('path');
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-const args = process.argv.slice(2);
-function getArg(flag, fallback) {
-  const i = args.indexOf(flag);
-  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
-}
+permissions:
+  contents: write  # needed to commit feed.xml back to the repo
 
-const INPUT = getArg('--in', 'feed.csv');
-const OUTPUT = getArg('--out', 'feed.xml');
+concurrency:
+  group: generate-feed
+  cancel-in-progress: false
 
-// --- Helpers ---------------------------------------------------------------
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-function escapeXML(str) {
-  // Escape for element text nodes.
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')  // must be first
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-function parseCSV(raw) {
-  // Simple CSV parser that handles basic quoted fields.
-  // For complex CSV, replace with 'csv-parse', but this keeps us dependency-free.
-  const lines = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim().length);
-  if (lines.length === 0) return { headers: [], rows: [] };
+      - name: Use Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-  const headers = splitCSVLine(lines[0]);
-  const rows = lines.slice(1).map(line => {
-    const cols = splitCSVLine(line);
-    const obj = {};
-    headers.forEach((h, idx) => (obj[h.trim()] = cols[idx] ?? ''));
-    return obj;
-  });
-  return { headers, rows };
-}
+      - name: Install dependencies
+        run: npm ci
 
-function splitCSVLine(line) {
-  const out = [];
-  let buf = '';
-  let inQuotes = false;
+      - name: Show workspace (debug)
+        run: ls -la
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { // escaped quote
-        buf += '"'; i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        buf += ch;
-      }
-    } else {
-      if (ch === ',') {
-        out.push(buf);
-        buf = '';
-      } else if (ch === '"') {
-        inQuotes = true;
-      } else {
-        buf += ch;
-      }
-    }
-  }
-  out.push(buf);
-  return out;
-}
+      - name: Build RSS from Google Sheets
+        run: |
+          node generate-rss.js \
+            --in "${{ secrets.FEED_CSV_URL }}" \
+            --out feed.xml \
+            --title "LatAm Online" \
+            --site "https://latamprompt.github.io/Online-Feed/" \
+            --feed "https://latamprompt.github.io/Online-Feed/feed.xml" \
+            --desc "Latest posts" \
+            --validate-xml
 
-function toRfc822Date(dateStr) {
-  // Accepts ISO-like or mm/dd/yyyy from Sheets, returns RFC-822 for RSS.
-  // If parsing fails, omit pubDate.
-  if (!dateStr) return null;
-  // Try native Date parsing; also try US-style mm/dd/yyyy
-  let d = new Date(dateStr);
-  if (isNaN(d)) {
-    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(dateStr).trim());
-    if (m) {
-      d = new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2]));
-    }
-  }
-  if (isNaN(d)) return null;
-  return d.toUTCString(); // acceptable for RSS <pubDate>
-}
+      - name: Commit feed.xml
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add feed.xml
+          git commit -m "chore: auto-build RSS (manual/push)" || echo "No changes to commit"
 
-function inferMimeFromUrl(url) {
-  if (!url) return null;
-  const u = url.toLowerCase();
-  if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'image/jpeg';
-  if (u.endsWith('.png')) return 'image/png';
-  if (u.endsWith('.webp')) return 'image/webp';
-  if (u.endsWith('.gif')) return 'image/gif';
-  return null; // let readers fetch without type if unknown
-}
+      - name: Push changes
+        run: git push
 
-// --- Build ----------------------------------------------------------------
-
-function buildRSS(rows) {
-  const title = 'LatAm Headlines';
-  const link = 'https://latamprompt.github.io/Online-Feed/';
-  const description = 'Latest Latin American news summaries';
-  const language = 'en-us';
-
-  let items = '';
-
-  for (const r of rows) {
-    const t = (r['Title'] || '').toString();
-    const img = (r['Image'] || '').toString();
-    const url = (r['URL'] || '').toString();
-    const src = (r['Source'] || '').toString();
-    const pub = (r['Publication Date'] || '').toString();
-    const sum = (r['Article Summary'] || '').toString();
-    const id = (r['ID'] || '').toString();
-    // const domain = (r['Domain'] || '').toString(); // unused but available
-
-    const pubDate = toRfc822Date(pub);
-    const guid = id || url || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-    // Description: headline again with a link + summary (your earlier preference)
-    const descHtml =
-      `<p><strong>${escapeXML(t)}</strong> — ${escapeXML(src)}</p>` +
-      (sum ? `<p>${escapeXML(sum)}</p>` : '') +
-      (url ? `<p><a href="${escapeXML(url)}">Read more</a></p>` : '');
-
-    let item = '  <item>\n';
-    item += `    <title>${escapeXML(t)}${src ? ' — ' + escapeXML(src) : ''}</title>\n`;
-    if (url) item += `    <link>${escapeXML(url)}</link>\n`;
-    if (pubDate) item += `    <pubDate>${escapeXML(pubDate)}</pubDate>\n`;
-    item += `    <guid isPermaLink="${url ? 'true' : 'false'}">${escapeXML(guid)}</guid>\n`;
-    item += `    <description><![CDATA[${descHtml}]]></description>\n`;
-
-    if (img) {
-      const mime = inferMimeFromUrl(img);
-      // enclosure must use attributes; still escape attribute values
-      if (mime) {
-        item += `    <enclosure url="${escapeXML(img)}" type="${escapeXML(mime)}" />\n`;
-      } else {
-        // Fallback: include image in description only (already handled via HTML if you want)
-        // Or add a media:thumbnail if you later add namespaces.
-      }
-    }
-
-    item += '  </item>\n';
-    items += item;
-  }
-
-  const xml =
-`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-<channel>
-  <title>${escapeXML(title)}</title>
-  <link>${escapeXML(link)}</link>
-  <description>${escapeXML(description)}</description>
-  <language>${escapeXML(language)}</language>
-${items}</channel>
-</rss>
-`;
-  return xml;
-}
-
-// --- Main -----------------------------------------------------------------
-
-(function main() {
-  const csvPath = path.resolve(process.cwd(), INPUT);
-  if (!fs.existsSync(csvPath)) {
-    console.error(`Input CSV not found: ${csvPath}`);
-    process.exit(1);
-  }
-  const raw = fs.readFileSync(csvPath, 'utf8');
-  const { rows } = parseCSV(raw);
-
-  const xml = buildRSS(rows);
-
-  const outPath = path.resolve(process.cwd(), OUTPUT);
-  fs.writeFileSync(outPath, xml, 'utf8');
-  console.log(`✅ RSS written to ${outPath} (${rows.length} items)`);
-})();
+      - name: Upload feed.xml artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-xml
+          path: feed.xml
