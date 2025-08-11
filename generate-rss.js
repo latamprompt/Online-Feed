@@ -17,26 +17,25 @@
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse/sync');
-
 // -----------------------------
 // CLI args
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
-  const i = args.indexOf(`--${name}`);
+  const i = args.indexOf(--${name});
   return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
 }
 function hasFlag(name) {
   return args.includes(--${name});
 }
 
-const IN_ARG     = argVal('in');
-const OUT_PATH   = argVal('out', '');
-const FEED_TITLE = argVal('title', 'Feed');
-const SITE_LINK  = argVal('site', '');
-const FEED_LINK  = argVal('feed', '');
-const FEED_DESC  = argVal('desc', '');
-const LIMIT      = parseInt(argVal('limit', '0'), 10) || 0;
+const IN_ARG       = argVal('in');
+const OUT_PATH     = argVal('out', '');
+const FEED_TITLE   = argVal('title', 'Feed');
+const SITE_LINK    = argVal('site', '');
+const FEED_LINK    = argVal('feed', '');
+const FEED_DESC    = argVal('desc', '');
+const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
 // -----------------------------
