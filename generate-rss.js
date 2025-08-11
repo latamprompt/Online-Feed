@@ -2,32 +2,28 @@
 /**
  * generate-rss.js
  *
- * Reads a CSV (local file path OR https URL) and generates an RSS 2.0 feed.
- * - Parses multiline quoted fields (csv-parse/sync)
- * - Validates rows; skips bad ones with logs
- * - Ensures <link>/<guid> are absolute URLs with no newlines/whitespace
- * - Preserves multiline summaries via CDATA
- * - Optional XML validation in dev (fast-xml-parser if installed)
- *
- * Usage:
- *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
- *   node generate-rss.js --in "https://docs.google.com/...&output=csv" --out feed.xml ...
+ * - Accepts --in as a local file path OR an https URL (auto-adds output=csv for Google Sheets)
+ * - Parses multiline CSV fields via csv-parse/sync
+ * - Validates rows; ensures absolute URLs; strips newlines from <link>/<guid>
+ * - Uses guid/id ONLY if it's a valid URL; otherwise falls back to link
+ * - Accepts "summary"/"description" OR "Article Summary" for item description
+ * - Optional --validate-xml using fast-xml-parser (if installed)
  */
-  
+
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse/sync');
 
 // -----------------------------
-// CLI args  (FIXED)
+// CLI args
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
-  const i = args.indexOf('--${name}');
+  const i = args.indexOf(--${name});
   return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
 }
 function hasFlag(name) {
-  return args.includes('--${name}');
+  return args.includes(--${name});
 }
 
 const IN_ARG       = argVal('in');
@@ -39,7 +35,6 @@ const FEED_DESC    = argVal('desc', '');
 const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
-
 // -----------------------------
 // URL/file helpers
 // -----------------------------
@@ -48,7 +43,7 @@ function isHttpUrl(s) {
 }
 function normalizeMaybeUrl(s) {
   if (typeof s !== 'string') return s;
-  // Fix http:/ or https:/ -> http:// or https:// (common typo)
+  // Fix http:/ or https:/ -> http:// or https://
   return s.trim().replace(/^(https?:)\/(?!\/)/i, '$1//');
 }
 function ensureSheetsCsv(url) {
@@ -122,7 +117,6 @@ function pick(obj, keys) {
   return '';
 }
 
-// IMPORTANT: GUID fix + Article Summary mapping here
 function validateRecord(rec) {
   const lower = {};
   for (const k of Object.keys(rec)) lower[k.toLowerCase()] = rec[k];
@@ -130,18 +124,15 @@ function validateRecord(rec) {
   const title = (pick(lower, ['title']) || '').trim();
   const link  = sanitizeUrl(pick(lower, ['link', 'url']));
 
-  // Use guid/id only if it's a valid absolute URL; otherwise fall back to link
+  // Only use guid/id if it's a valid absolute URL; else fall back to link
   const guidField = sanitizeUrl(pick(lower, ['guid', 'id']));
   const guid0 = validAbsUrl(guidField) ? guidField : link;
 
-  // Date is optional (sheet often uses "Publication Date", which we don't hard-require)
+  // Date is optional; Sheet often uses another header ("Publication Date"); that's fine
   const date0 = (pick(lower, ['pubdate', 'date']) || '').trim();
 
-  // Description: prefer summary/description; fall back to "Article Summary"
-  const desc =
-    pick(lower, ['summary', 'description']) ||
-    lower['article summary'] ||
-    '';
+  // Description: prefer summary/description; fallback to "Article Summary"
+  const desc = pick(lower, ['summary', 'description']) || lower['article summary'] || '';
 
   const errors = [];
   if (!title) errors.push('missing title');
@@ -221,7 +212,7 @@ function buildRSS({ items, channel }) {
     xml += `      <title>${escapeXML(it.title)}</title>\n`;
     xml += `      <link>${link}</link>\n`;
     xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${guid}</guid>\n`;
-    xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n`;
+    xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n>`;
     if ((it.description || '').trim() !== '') {
       xml += `      <description>${cdata(it.description)}</description>\n`;
     }
@@ -302,4 +293,4 @@ async function main() {
 main().catch(err => {
   console.error('[rss] fatal:', err && err.stack ? err.stack : err);
   process.exit(1);
-}
+});
