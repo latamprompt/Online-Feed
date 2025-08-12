@@ -1,55 +1,46 @@
-name: Update feed (scheduled)
+name: Build RSS from Google Sheets
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (adjust as needed)
+  # Manual trigger for testing
   workflow_dispatch:
-
-permissions:
-  contents: write   # needed to commit feed.xml back to the repo
-
-concurrency:
-  group: update-feed
-  cancel-in-progress: false
+  # OPTIONAL: keep or tweak your schedule (every 30 min here)
+  schedule:
+    - cron: "*/30 * * * *"
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Use Node 20
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
 
-      - name: Show workspace (debug)
-        run: ls -la
-
-      - name: Confirm feed source (masked)
+      # Download your published CSV to a local file Feed.csv
+      - name: Download CSV
         run: |
-          echo "Using FEED_CSV_URL from secrets"
-          echo "First 50 chars (masked): ${FEED_CSV_URL:0:0}****"
-        env:
-          FEED_CSV_URL: ${{ secrets.FEED_CSV_URL }}
+          CSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv"
+          curl -fL "$CSV_URL" -o Feed.csv
+          echo "Downloaded CSV to $(pwd)/Feed.csv"
+      
+      # Build the RSS (validates XML too)
+      - name: Build RSS
+        run: |
+          node generate-rss.js --in Feed.csv --out feed.xml --validate-xml
 
-      - name: Build RSS from Google Sheets
-        run: node generate-rss.js --in "${{ secrets.FEED_CSV_URL }}" --out feed.xml
-
-      - name: Commit feed.xml
+      # Commit only if feed.xml changed
+      - name: Commit feed if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add feed.xml
-          git commit -m "chore: scheduled RSS build" || echo "No changes to commit"
-
-      - name: Push changes
-        run: git push
-
-      - name: Upload feed.xml artifact (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: feed-xml
-          path: feed.xml
+          if ! git diff --quiet -- feed.xml; then
+            git add feed.xml
+            git commit -m "[rss] update feed.xml"
+            git push
+          else
+            echo "No changes to feed.xml"
+          fi
