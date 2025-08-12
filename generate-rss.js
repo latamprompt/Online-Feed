@@ -52,14 +52,11 @@ function toRfc2822(date) {
   return new Date(date).toUTCString();
 }
 
-// Robust date parsing from varied inputs (ISO, RFC, mm/dd/yyyy, yyyy-mm-dd, etc.)
 function parseDate(input) {
   if (!input) return null;
-  // Try native first
   let d = new Date(input);
   if (!isNaN(d)) return d;
 
-  // Try mm/dd/yyyy or m/d/yyyy
   const us = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/;
   const m1 = String(input).match(us);
   if (m1) {
@@ -69,7 +66,6 @@ function parseDate(input) {
     if (!isNaN(d)) return d;
   }
 
-  // yyyy-mm-dd
   const iso = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
   const m2 = String(input).match(iso);
   if (m2) {
@@ -77,7 +73,6 @@ function parseDate(input) {
     d = new Date(`${y}-${String(m).padStart(2,'0')}-${String(d2).padStart(2,'0')}T00:00:00Z`);
     if (!isNaN(d)) return d;
   }
-
   return null;
 }
 
@@ -107,10 +102,8 @@ function parseCsv(text) {
 
     field += c; i++;
   }
-  // last field/row
   pushField();
   if (row.length > 1 || (row.length === 1 && row[0] !== '')) pushRow();
-
   return rows;
 }
 
@@ -125,22 +118,15 @@ function rowsToObjects(rows) {
   });
 }
 
-// Optional XML validator (simple)
+// Minimal XML validator (bare ampersands)
 function tryValidateXml(xml) {
-  // Minimal check: ensure no bare '&' characters outside entities.
   const badAmp = /&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/;
   if (badAmp.test(xml)) {
     const idx = xml.search(badAmp);
-    // rough line/col
     const pre = xml.slice(0, idx);
     const line = pre.split('\n').length;
     const col = pre.length - pre.lastIndexOf('\n');
-    throw {
-      code: 'InvalidChar',
-      msg: "char '&' is not expected.",
-      line,
-      col
-    };
+    throw { code: 'InvalidChar', msg: "char '&' is not expected.", line, col };
   }
 }
 
@@ -162,28 +148,29 @@ function buildRss(items) {
   ].join('\n');
 
   const footer = `\n</channel>\n</rss>\n`;
-
   return header + '\n' + items.join('\n') + footer;
 }
 
 function buildItem(row) {
-  const title = (row[COLS.TITLE] || '').trim();
+  const baseTitle = (row[COLS.TITLE] || '').trim();
+  const source = (row[COLS.SOURCE] || '').trim();
+  const displayTitle = source ? `${baseTitle} [${source}]` : baseTitle;
+
   const url = (row[COLS.URL] || '').trim();
   const summary = (row[COLS.SUMMARY] || '').trim();
-  const guid = (row[COLS.ID] || url || title).trim();
+  const guid = (row[COLS.ID] || url || baseTitle).trim();
 
   const pubRaw = (row[COLS.PUBDATE] || '').trim();
   const d = parseDate(pubRaw) || new Date();
   const pubDate = toRfc2822(d);
 
-  const safeTitle = escapeXml(title);
+  const safeTitle = escapeXml(displayTitle);
   const safeLink = escapeXml(url);
 
-  // NEW: clickable headline in body + summary, wrapped in CDATA
+  // Body: clickable headline (with source suffix) + summary; no extra "view" link here.
   const descriptionHtml =
     `<p><a href="${safeLink}">${safeTitle}</a></p>` +
     (summary ? `<p>${escapeXml(summary)}</p>` : '');
-
   const description = `<![CDATA[${descriptionHtml}]]>`;
 
   return [
@@ -205,17 +192,14 @@ function main() {
   const rows = parseCsv(raw);
   const objs = rowsToObjects(rows);
 
-  // Filter out rows missing required fields
   const cleaned = objs.filter(o => (o[COLS.TITLE] || '').trim() && (o[COLS.URL] || '').trim());
 
-  // Sort DESC by pub date
   cleaned.sort((a, b) => {
     const da = parseDate(a[COLS.PUBDATE]) || new Date(0);
     const db = parseDate(b[COLS.PUBDATE]) || new Date(0);
     return db - da;
   });
 
-  // Deduplicate by GUID (or URL if GUID missing)
   const seen = new Set();
   const unique = [];
   for (const row of cleaned) {
