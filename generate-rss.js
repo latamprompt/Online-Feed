@@ -1,17 +1,6 @@
 #!/usr/bin/env node
 /**
- * generate-rss.js
- *
- * Reads a CSV (local file path OR https URL) and generates an RSS 2.0 feed.
- * - Multiline CSV fields supported via csv-parse/sync
- * - Validates rows; skips bad ones with logs
- * - Ensures <link>/<guid> are absolute URLs and properly XML-escaped
- * - Preserves multiline summaries via CDATA
- * - Optional XML validation in dev (fast-xml-parser if installed)
- *
- * Usage:
- *   node generate-rss.js --in feed.csv --out feed.xml --title "My Site" --site "https://example.com" --feed "https://example.com/feed.xml" --desc "Latest posts" --limit 100 --validate-xml
- *   node generate-rss.js --in "https://docs.google.com/...&output=csv" --out feed.xml ...
+ * generate-rss.js — Reads a CSV and generates an RSS 2.0 feed
  */
 
 const fs = require('fs');
@@ -19,7 +8,7 @@ const path = require('path');
 const { parse } = require('csv-parse/sync');
 
 // -----------------------------
-// CLI args (fixed)
+// CLI args
 // -----------------------------
 const args = process.argv.slice(2);
 function argVal(name, fallback = '') {
@@ -30,13 +19,13 @@ function hasFlag(name) {
   return args.includes(`--${name}`);
 }
 
-const IN_ARG       = argVal('in');
-const OUT_PATH     = argVal('out', '');
-const FEED_TITLE   = argVal('title', 'Feed');
-const SITE_LINK    = argVal('site', '');
-const FEED_LINK    = argVal('feed', '');
-const FEED_DESC    = argVal('desc', '');
-const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
+const IN_ARG     = argVal('in');
+const OUT_PATH   = argVal('out', '');
+const FEED_TITLE = argVal('title', 'Feed');
+const SITE_LINK  = argVal('site', '');
+const FEED_LINK  = argVal('feed', '');
+const FEED_DESC  = argVal('desc', '');
+const LIMIT      = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
 // -----------------------------
@@ -47,7 +36,6 @@ function isHttpUrl(s) {
 }
 function normalizeMaybeUrl(s) {
   if (typeof s !== 'string') return s;
-  // Fix http:/ or https:/ -> http:// or https://
   return s.trim().replace(/^(https?:)\/(?!\/)/i, '$1//');
 }
 function ensureSheetsCsv(url) {
@@ -106,8 +94,7 @@ function parseCSV(raw) {
 // -----------------------------
 function sanitizeUrl(u) {
   if (typeof u !== 'string') return '';
-  const cleaned = u.replace(/[\r\n]/g, '').replace(/\s+/g, '');
-  return cleaned.trim();
+  return u.replace(/[\r\n]/g, '').replace(/\s+/g, '').trim();
 }
 function validAbsUrl(u) {
   const s = sanitizeUrl(u);
@@ -120,6 +107,14 @@ function pick(obj, keys) {
   }
   return '';
 }
+function parseDateFlexible(s) {
+  if (!s || typeof s !== 'string') return null;
+  const t = s.trim();
+  const noTz = /^\d{1,4}[-/]\d{1,2}[-/]\d{1,4}(\s+\d{1,2}:\d{2}(:\d{2})?)?$/;
+  const tryStr = noTz.test(t) && !/[A-Za-z]{2,}|Z|GMT/i.test(t) ? `${t} UTC` : t;
+  const d = new Date(tryStr);
+  return isNaN(d.getTime()) ? null : d;
+}
 
 function validateRecord(rec) {
   const lower = {};
@@ -127,15 +122,14 @@ function validateRecord(rec) {
 
   const title = (pick(lower, ['title']) || '').trim();
   const link  = sanitizeUrl(pick(lower, ['link', 'url']));
-
-  // Use guid/id only if it's a valid absolute URL; else fall back to link
   const guidField = sanitizeUrl(pick(lower, ['guid', 'id']));
   const guid0 = validAbsUrl(guidField) ? guidField : link;
 
-  // Date optional (sheet may use "Publication Date" which we don't require)
-  const date0 = (pick(lower, ['pubdate', 'date']) || '').trim();
+  const dateStr = pick(lower, [
+    'pubdate', 'date', 'publication date', 'published', 'timestamp'
+  ]) || '';
+  const parsedDate = parseDateFlexible(dateStr);
 
-  // Description: prefer summary/description; fallback to "Article Summary"
   const desc =
     pick(lower, ['summary', 'description']) ||
     lower['article summary'] ||
@@ -145,12 +139,12 @@ function validateRecord(rec) {
   if (!title) errors.push('missing title');
   if (!validAbsUrl(link)) errors.push('invalid link');
   if (!validAbsUrl(guid0)) errors.push('invalid guid');
-  if (date0 && isNaN(new Date(date0).getTime())) errors.push('bad pubDate');
+  if (dateStr && !parsedDate) errors.push('bad pubDate');
 
   return {
     ok: errors.length === 0,
     errors,
-    normalized: { title, link, guid: guid0, pubDate: date0, description: desc },
+    normalized: { title, link, guid: guid0, pubDate: parsedDate, description: desc },
     original: rec,
   };
 }
@@ -159,47 +153,45 @@ function prepareItems(rows, { onSkip = () => {} } = {}) {
   const seen = new Set();
   const items = [];
 
-  for (const r of rows) {
+  rows.forEach((r, idx) => {
     const v = validateRecord(r);
-    if (!v.ok) { onSkip({ row: r, reason: v.errors.join('; ') }); continue; }
+    if (!v.ok) { onSkip({ row: r, reason: v.errors.join('; ') }); return; }
 
     const guidKey = v.normalized.guid.toLowerCase();
-    if (seen.has(guidKey)) { onSkip({ row: r, reason: 'duplicate guid' }); continue; }
+    if (seen.has(guidKey)) { onSkip({ row: r, reason: 'duplicate guid' }); return; }
     seen.add(guidKey);
 
-    const date = v.normalized.pubDate ? new Date(v.normalized.pubDate) : new Date();
+    const pubDate = v.normalized.pubDate || new Date();
 
     items.push({
       title: v.normalized.title,
       link: v.normalized.link,
       guid: v.normalized.guid,
-      pubDate: isNaN(date.getTime()) ? new Date() : date,
+      pubDate,
       description: v.normalized.description,
+      __rowIndex: idx
     });
-  }
+  });
 
-  items.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+  items.sort((a, b) => {
+    const dt = b.pubDate.getTime() - a.pubDate.getTime();
+    return dt !== 0 ? dt : a.__rowIndex - b.__rowIndex;
+  });
+
   return LIMIT > 0 ? items.slice(0, LIMIT) : items;
 }
 
 // -----------------------------
-// XML helpers (escape element text & attributes)
+// XML helpers
 // -----------------------------
 function noNL(s) { return typeof s === 'string' ? s.replace(/[\r\n]/g, '') : s; }
 function escapeXML(s) {
   if (s == null) return '';
   return String(s)
     .replace(/&/g, '&amp;')
+    .replace(/&(amp;)+/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
-}
-function escapeAttr(s) {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 function cdata(s) {
   if (s == null || s === '') return '';
@@ -207,9 +199,6 @@ function cdata(s) {
 }
 function rfc822(date) { return date.toUTCString(); }
 
-// -----------------------------
-// XML build
-// -----------------------------
 function buildRSS({ items, channel }) {
   const now = new Date();
   let xml = '';
@@ -217,13 +206,13 @@ function buildRSS({ items, channel }) {
   xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
   xml += `  <channel>\n`;
   xml += `    <title>${escapeXML(channel.title || 'Feed')}</title>\n`;
-  if (channel.link) xml += `    <link>${escapeXML(noNL(channel.link))}</link>\n`;
+  if (channel.link) xml += `    <link>${noNL(channel.link)}</link>\n`;
   if (channel.description) xml += `    <description>${escapeXML(channel.description)}</description>\n`;
   if (channel.language) xml += `    <language>${escapeXML(channel.language)}</language>\n`;
   if (channel.ttl) xml += `    <ttl>${String(channel.ttl)}</ttl>\n`;
   xml += `    <lastBuildDate>${rfc822(now)}</lastBuildDate>\n`;
   if (channel.self) {
-    xml += `    <atom:link href="${escapeAttr(noNL(channel.self))}" rel="self" type="application/rss+xml"/>\n`;
+    xml += `    <atom:link href="${noNL(channel.self)}" rel="self" type="application/rss+xml"/>\n`;
   }
 
   for (const it of items) {
@@ -231,8 +220,8 @@ function buildRSS({ items, channel }) {
     const guid = noNL(it.guid);
     xml += `    <item>\n`;
     xml += `      <title>${escapeXML(it.title)}</title>\n`;
-    xml += `      <link>${escapeXML(link)}</link>\n`;
-    xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${escapeXML(guid)}</guid>\n`;
+    xml += `      <link>${link}</link>\n`;
+    xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${guid}</guid>\n`;
     xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n`;
     if ((it.description || '').trim() !== '') {
       xml += `      <description>${cdata(it.description)}</description>\n`;
@@ -271,12 +260,12 @@ function tryValidateXml(xml) {
 // -----------------------------
 async function main() {
   if (!IN_ARG) {
-    console.error('Usage: node generate-rss.js --in <csv file or https URL> [--out feed.xml] [--title "Title"] [--site "https://example.com"] [--feed "https://example.com/feed.xml"] [--desc "Description"] [--limit N] [--validate-xml]');
+    console.error('Usage: node generate-rss.js --in <csv file or https URL> [--out feed.xml] ...');
     process.exit(1);
   }
 
   const raw = await readInputToString(IN_ARG).catch(err => {
-    console.error(`[rss] failed to read input (${IN_ARG}):`, err && err.message ? err.message : err);
+    console.error(`[rss] failed to read input (${IN_ARG}):`, err?.message || err);
     process.exit(1);
   });
 
@@ -312,6 +301,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('[rss] fatal:', err && err.stack ? err.stack : err);
+  console.error('[rss] fatal:', err?.stack || err);
   process.exit(1);
 });
