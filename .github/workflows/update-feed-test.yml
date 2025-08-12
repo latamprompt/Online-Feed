@@ -1,0 +1,43 @@
+name: Build RSS (TEST) from Google Sheets
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download CSV
+        run: |
+          set -euo pipefail
+          CSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vSyhDvRQE6Uo75KjBrUyd9v_NZrQERqupl1LxS7sD50WoTKHVBMbs42x_7ne7I3JK_QJHlHa_rckK0-/pub?gid=477208386&single=true&output=csv"
+          curl -fL "$CSV_URL" -o Feed.csv
+          echo "----- ls -lh -----"
+          ls -lh
+          echo "----- head Feed.csv -----"
+          head -n 2 Feed.csv
+
+      - name: Build RSS (use local CSV)
+        run: |
+          set -euo pipefail
+          node generate-rss.js --in ./Feed.csv --out feed.xml --validate-xml
+
+      - name: Commit feed if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- feed.xml; then
+            git add feed.xml
+            git commit -m "[rss] update feed.xml (test workflow)"
+            git push
+          else
+            echo "No changes to feed.xml"
+          fi
