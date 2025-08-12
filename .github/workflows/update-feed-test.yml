@@ -22,13 +22,38 @@ jobs:
           curl -fL "$CSV_URL" -o Feed.csv
           echo "----- ls -lh -----"
           ls -lh
-          echo "----- head Feed.csv -----"
-          head -n 2 Feed.csv
+          echo "----- file Feed.csv -----"
+          file Feed.csv || true
+          echo "----- wc -c Feed.csv (bytes) -----"
+          wc -c Feed.csv
+          echo "----- head -n 5 Feed.csv -----"
+          head -n 5 Feed.csv
+          # Hard fail if file is empty
+          if [ ! -s Feed.csv ]; then
+            echo "Feed.csv is empty. Failing."
+            exit 1
+          fi
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-csv
+          path: Feed.csv
+          retention-days: 3
 
       - name: Build RSS (use local CSV)
         run: |
           set -euo pipefail
           node generate-rss.js --in ./Feed.csv --out feed.xml --validate-xml
+          echo "----- head -n 20 feed.xml -----"
+          head -n 20 feed.xml
+
+      - name: Upload RSS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-xml
+          path: feed.xml
+          retention-days: 3
 
       - name: Commit feed if changed
         run: |
@@ -36,7 +61,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if ! git diff --quiet -- feed.xml; then
             git add feed.xml
-            git commit -m "[rss] update feed.xml (test workflow)"
+            git commit -m "[rss][test] update feed.xml"
             git push
           else
             echo "No changes to feed.xml"
