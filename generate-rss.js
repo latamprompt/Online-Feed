@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 /**
  * generate-rss.js — Reads a CSV and generates an RSS 2.0 feed
+ * - URL or file input (--in), auto-adds output=csv for Google Sheets
+ * - Multiline CSV via csv-parse/sync
+ * - GUID: use guid/id only if it's a valid URL; else fall back to link
+ * - Accepts "Article Summary" for description
+ * - Escapes URLs in XML text/attributes (& < > and ")
+ * - Parses "Publication Date" and similar; stable sort
+ * - Optional --validate-xml (fast-xml-parser)
  */
 
 const fs = require('fs');
@@ -19,13 +26,13 @@ function hasFlag(name) {
   return args.includes(`--${name}`);
 }
 
-const IN_ARG     = argVal('in');
-const OUT_PATH   = argVal('out', '');
-const FEED_TITLE = argVal('title', 'Feed');
-const SITE_LINK  = argVal('site', '');
-const FEED_LINK  = argVal('feed', '');
-const FEED_DESC  = argVal('desc', '');
-const LIMIT      = parseInt(argVal('limit', '0'), 10) || 0;
+const IN_ARG       = argVal('in');
+const OUT_PATH     = argVal('out', '');
+const FEED_TITLE   = argVal('title', 'Feed');
+const SITE_LINK    = argVal('site', '');
+const FEED_LINK    = argVal('feed', '');
+const FEED_DESC    = argVal('desc', '');
+const LIMIT        = parseInt(argVal('limit', '0'), 10) || 0;
 const VALIDATE_XML = hasFlag('validate-xml');
 
 // -----------------------------
@@ -122,6 +129,8 @@ function validateRecord(rec) {
 
   const title = (pick(lower, ['title']) || '').trim();
   const link  = sanitizeUrl(pick(lower, ['link', 'url']));
+
+  // Use guid/id only if it's a valid absolute URL; else fall back to link
   const guidField = sanitizeUrl(pick(lower, ['guid', 'id']));
   const guid0 = validAbsUrl(guidField) ? guidField : link;
 
@@ -173,6 +182,7 @@ function prepareItems(rows, { onSkip = () => {} } = {}) {
     });
   });
 
+  // Newest first; if equal dates, keep original CSV order
   items.sort((a, b) => {
     const dt = b.pubDate.getTime() - a.pubDate.getTime();
     return dt !== 0 ? dt : a.__rowIndex - b.__rowIndex;
@@ -182,16 +192,23 @@ function prepareItems(rows, { onSkip = () => {} } = {}) {
 }
 
 // -----------------------------
-// XML helpers
+// XML helpers (escape element text & attributes)
 // -----------------------------
 function noNL(s) { return typeof s === 'string' ? s.replace(/[\r\n]/g, '') : s; }
 function escapeXML(s) {
   if (s == null) return '';
   return String(s)
     .replace(/&/g, '&amp;')
-    .replace(/&(amp;)+/g, '&amp;')
-    .replace(/</g, '&lt;')
+    .replace(/<(?!\!)/g, '&lt;') // leave CDATA openers alone
     .replace(/>/g, '&gt;');
+}
+function escapeAttr(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 function cdata(s) {
   if (s == null || s === '') return '';
@@ -199,6 +216,9 @@ function cdata(s) {
 }
 function rfc822(date) { return date.toUTCString(); }
 
+// -----------------------------
+// XML build
+// -----------------------------
 function buildRSS({ items, channel }) {
   const now = new Date();
   let xml = '';
@@ -206,13 +226,13 @@ function buildRSS({ items, channel }) {
   xml += `<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n`;
   xml += `  <channel>\n`;
   xml += `    <title>${escapeXML(channel.title || 'Feed')}</title>\n`;
-  if (channel.link) xml += `    <link>${noNL(channel.link)}</link>\n`;
+  if (channel.link) xml += `    <link>${escapeXML(noNL(channel.link))}</link>\n`;
   if (channel.description) xml += `    <description>${escapeXML(channel.description)}</description>\n`;
   if (channel.language) xml += `    <language>${escapeXML(channel.language)}</language>\n`;
   if (channel.ttl) xml += `    <ttl>${String(channel.ttl)}</ttl>\n`;
   xml += `    <lastBuildDate>${rfc822(now)}</lastBuildDate>\n`;
   if (channel.self) {
-    xml += `    <atom:link href="${noNL(channel.self)}" rel="self" type="application/rss+xml"/>\n`;
+    xml += `    <atom:link href="${escapeAttr(noNL(channel.self))}" rel="self" type="application/rss+xml"/>\n`;
   }
 
   for (const it of items) {
@@ -220,8 +240,8 @@ function buildRSS({ items, channel }) {
     const guid = noNL(it.guid);
     xml += `    <item>\n`;
     xml += `      <title>${escapeXML(it.title)}</title>\n`;
-    xml += `      <link>${link}</link>\n`;
-    xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${guid}</guid>\n`;
+    xml += `      <link>${escapeXML(link)}</link>\n`;
+    xml += `      <guid isPermaLink="${/^https?:\/\//i.test(guid) ? 'true' : 'false'}">${escapeXML(guid)}</guid>\n`;
     xml += `      <pubDate>${rfc822(it.pubDate)}</pubDate>\n`;
     if ((it.description || '').trim() !== '') {
       xml += `      <description>${cdata(it.description)}</description>\n`;
