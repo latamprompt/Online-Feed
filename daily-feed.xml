@@ -5,20 +5,40 @@
         <link>https://latamprompt.github.io/Online-Feed/</link>
         <description>A daily digest of curated Latin American news.</description>
         <language>en-us</language>
-        <lastBuildDate>Tue, 26 Aug 2025 07:12:54 -0400</lastBuildDate>
+        <lastBuildDate>Wed, 27 Aug 2025 06:29:30 -0400</lastBuildDate>
         <managingEditor>LatAm Prompt News Feed</managingEditor>
         <webMaster>LatAm Prompt News Feed</webMaster>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
       
     <item>
-      <title>LatAm Prompt News Feed - August 26, 2025</title>
+      <title>LatAm Prompt News Feed - August 27, 2025</title>
       <link>https://latamprompt.github.io/Online-Feed/</link>
-      <guid isPermaLink="false">2025-08-26</guid>
-      <pubDate>Tue, 26 Aug 2025 07:12:54 -0400</pubDate>
+      <guid isPermaLink="false">2025-08-27</guid>
+      <pubDate>Wed, 27 Aug 2025 06:29:30 -0400</pubDate>
       <author>LatAm Prompt News Feed</author>
       <description><![CDATA[
-      <h3><a href="https://www.nytimes.com/2025/08/26/opinion/trump-brazil-india-tariffs.html">Brazil, India and Other Countries Fight Back Against Trump’s Tariffs</a> &mdash; The New York Times </h3>
-      <p>Brazil, India and other emerging countries are hedging their bets against the United States.</p>
+      <h3><a href="https://www.ft.com/content/fcb6e5ba-d183-4527-9385-fef11ad361f6">The Mexican town putting Sheinbaum’s security crackdown to the test</a> &mdash; The Financial Times</h3>
+      <p>State of Chiapas looks to quell armed groups in Pantelhó ahead of delayed election and US pressure over security</p>
+      <hr/>
+    
+      <h3><a href="https://www.ft.com/content/dc68b9c5-e2f7-4403-8887-e2895265afb0">Venezuelans turn to crypto as government targets dollars</a> &mdash; The Financial Times</h3>
+      <p>As Maduro cracks down on black market dollars and the bolívar plunges, ever more locals see crypto as a bulwark</p>
+      <hr/>
+    
+      <h3><a href="https://www.wsj.com/world/americas/mexican-drug-cartels-ecuador-violence-29153688">Mexico’s Cartels Are Exporting Their Bloody Rivalry to Ecuador and Beyond</a> &mdash; The Wall Street Journal</h3>
+      <p>The two most powerful drug rings are locked in a turf war over control of a key South American smuggling route. The bodies are piling up.</p>
+      <hr/>
+    
+      <h3><a href="https://www.bloomberg.com/news/features/2025-08-19/colombia-health-care-crisis-spirals-as-ers-maternity-wards-close">Health Crisis Spirals in Colombia as ERs and Maternity Wards Close</a> &mdash; Bloomberg</h3>
+      <p>Health Crisis Spirals in Colombia as ERs and Maternity Wards Close</p>
+      <hr/>
+    
+      <h3><a href="https://www.bloomberg.com/news/features/2025-08-26/argentina-s-yerba-mate-farmers-reel-as-milei-ends-price-controls">Messi’s Favorite Drink Is Rocked After Milei Ends Price Controls</a> &mdash; Bloomberg</h3>
+      <p>Messi’s Favorite Drink Is Rocked After Milei Ends Price Controls</p>
+      <hr/>
+    
+      <h3><a href="https://www.bloomberg.com/opinion/articles/2025-08-26/copper-deal-in-argentina-with-glencore-could-be-the-future">Copper May Be the Color of Argentina’s Future</a> &mdash; Bloomberg</h3>
+      <p>Copper May Be the Color of Argentina’s Future</p>
       <hr/>
     ]]></description>
     </item>
