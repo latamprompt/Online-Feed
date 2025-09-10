@@ -5,24 +5,36 @@
         <link>https://latamprompt.github.io/Online-Feed/</link>
         <description>A daily digest of curated Latin American news.</description>
         <language>en-us</language>
-        <lastBuildDate>Tue, 09 Sep 2025 06:00:25 -0400</lastBuildDate>
+        <lastBuildDate>Wed, 10 Sep 2025 07:32:50 -0400</lastBuildDate>
         <managingEditor>LatAm Prompt News Feed</managingEditor>
         <webMaster>LatAm Prompt News Feed</webMaster>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
       
     <item>
-      <title>LatAm Prompt News Feed - September 09, 2025</title>
+      <title>LatAm Prompt News Feed - September 10, 2025</title>
       <link>https://latamprompt.github.io/Online-Feed/</link>
-      <guid isPermaLink="false">2025-09-09</guid>
-      <pubDate>Tue, 09 Sep 2025 06:00:25 -0400</pubDate>
+      <guid isPermaLink="false">2025-09-10</guid>
+      <pubDate>Wed, 10 Sep 2025 07:32:50 -0400</pubDate>
       <author>LatAm Prompt News Feed</author>
       <description><![CDATA[
-      <h3><a href="https://www.bbc.com/news/articles/cn4wx9zlpj5o">How the coup trial of Jair Bolsonaro has divided Brazil</a> &mdash; BBC</h3>
-      <p>The ex-president is accused of trying to overturn his election loss but his supporters say it is a witch hunt.</p>
+      <h3><a href="https://www.nytimes.com/2025/09/09/world/americas/brazil-american-flag-nfl.html">The New Symbol of the Brazilian Right: the American Flag</a> &mdash; The New York Times </h3>
+      <p>In a nod to President Trump, Brazil’s nationalist movement has adopted the stars and stripes. Now one flag could be the focus of an investigation involving the N.F.L.</p>
       <hr/>
     
-      <h3><a href="https://www.nytimes.com/2025/09/08/world/americas/trump-migrants-remittances.html">Deportation Fears Are Fueling Money Transfers to Latin America</a> &mdash; The New York Times </h3>
-      <p>Money transfers to Guatemala, Honduras and other nations have increased in recent months, totaling billions of dollars. Undocumented migrants in the United States say they are sending money to relatives while they can.</p>
+      <h3><a href="https://www.nytimes.com/2025/09/09/us/chicago-immigrant-population-trump-ice.html">Get to Know Chicago’s Immigrant Community, Target of Trump’s Crackdown</a> &mdash; The New York Times </h3>
+      <p>Almost 40 percent of immigrants living in Chicago are from Mexico. More than 800,000 of the city’s 2.7 million residents identify as Hispanic or Latino.</p>
+      <hr/>
+    
+      <h3><a href="https://www.wsj.com/world/americas/two-presidents-one-assassination-plot-brazils-trial-of-the-century-3d7c5fb7">Two Presidents, One Assassination Plot: Brazil’s Trial of the Century</a> &mdash; The Wall Street Journal</h3>
+      <p>Brazil’s Supreme Court will decide if former President Jair Bolsonaro tried to stage a coup after the last election and plotted to kill his opponents.</p>
+      <hr/>
+    
+      <h3><a href="https://www.ft.com/content/9ba5c037-2789-4222-85c5-f624c7b77c6a">Mexican navy scandal rocks top US cartel-fighting partner</a> &mdash; The Financial Times</h3>
+      <p>Several officers arrested in country’s most trusted security institution</p>
+      <hr/>
+    
+      <h3><a href="https://www.newyorker.com/news/the-lede/brazil-braces-for-a-verdict-on-its-ex-president-and-on-its-democracy">Brazil Braces for a Verdict on Its Ex-President—and on Its Democracy</a> &mdash; The New Yorker</h3>
+      <p>Jair Bolsonaro faces decades in prison for allegedly attempting a coup after he lost an election. President Trump, like millions of Brazilians, is watching closely.</p>
       <hr/>
     ]]></description>
     </item>
