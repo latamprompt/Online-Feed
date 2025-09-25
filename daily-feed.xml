@@ -5,28 +5,32 @@
         <link>https://latamprompt.github.io/Online-Feed/</link>
         <description>A daily digest of curated Latin American news.</description>
         <language>en-us</language>
-        <lastBuildDate>Wed, 24 Sep 2025 06:47:33 -0400</lastBuildDate>
+        <lastBuildDate>Thu, 25 Sep 2025 06:28:25 -0400</lastBuildDate>
         <managingEditor>LatAm Prompt News Feed</managingEditor>
         <webMaster>LatAm Prompt News Feed</webMaster>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
       
     <item>
-      <title>LatAm Prompt News Feed - September 24, 2025</title>
+      <title>LatAm Prompt News Feed - September 25, 2025</title>
       <link>https://latamprompt.github.io/Online-Feed/</link>
-      <guid isPermaLink="false">2025-09-24</guid>
-      <pubDate>Wed, 24 Sep 2025 06:47:33 -0400</pubDate>
+      <guid isPermaLink="false">2025-09-25</guid>
+      <pubDate>Thu, 25 Sep 2025 06:28:25 -0400</pubDate>
       <author>LatAm Prompt News Feed</author>
       <description><![CDATA[
-      <h3><a href="https://www.bloomberg.com/opinion/articles/2025-09-23/milei-s-big-problem-is-beyond-us-treasury-s-help">Milei’s Big Problem Is Beyond US Treasury’s Help</a> &mdash; Bloomberg</h3>
-      <p>Milei’s Big Problem Is Beyond US Treasury’s Help</p>
+      <h3><a href="https://www.wsj.com/world/americas/argentina-milei-inflation-economy-help-96966c6d">Milei Fixed Half of Argentina’s Inflation Problem. He Needs Help With the Rest.</a> &mdash; The Wall Street Journal</h3>
+      <p>The country’s central bank no longer prints money to finance deficits, but a run on the currency could still cause prices to surge.</p>
       <hr/>
     
-      <h3><a href="https://www.wsj.com/world/americas/milei-is-counting-on-trump-to-bail-argentina-out-of-an-economic-mess-a15959b5">Milei Is Counting on Trump to Bail Argentina Out of an Economic Mess</a> &mdash; The Wall Street Journal</h3>
-      <p>‘Donald Trump to the Rescue’, a leading Argentine columnist wrote of the U.S.’s support for Milei as he grapples with popular anger and market turmoil.</p>
+      <h3><a href="https://www.ft.com/content/e7a9f837-eb98-4f9e-b050-ccd6ecb38ad4">US support is only a temporary fix for Argentina</a> &mdash; The Financial Times</h3>
+      <p>After some initial success, Javier Milei’s chainsaw seems to have sputtered</p>
       <hr/>
     
-      <h3><a href="https://www.nytimes.com/2025/09/24/world/americas/mexico-city-cortes-legacy.html">This Conquistador Changed History. Neglect Haunts His Tomb in Mexico</a> &mdash; The New York Times </h3>
-      <p>Hernán Cortés toppled the Aztecs, winning Mexico for Spain. His trash-strewn resting place reflects how the conquest is still fueling quarrels and testing ties with Spain.</p>
+      <h3><a href="https://www.ft.com/content/5a747a2a-84bd-45cd-a5a5-3eb8014d9aaa">How to exorcise Argentina’s economic demons</a> &mdash; The Financial Times</h3>
+      <p>American support alone is insufficient for Milei to ensure the country’s stability</p>
+      <hr/>
+    
+      <h3><a href="https://www.wsj.com/opinion/bolivias-chance-to-rejoin-the-world-73b95a03">Opinion | Bolivia’s Chance to Rejoin the World</a> &mdash; The Wall Street Journal</h3>
+      <p>With years of socialist rule coming to an end, the country can finally repair relations with the United States.</p>
       <hr/>
     ]]></description>
     </item>
