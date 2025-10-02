@@ -5,28 +5,36 @@
         <link>https://latamprompt.github.io/Online-Feed/</link>
         <description>A daily digest of curated Latin American news.</description>
         <language>en-us</language>
-        <lastBuildDate>Wed, 01 Oct 2025 06:40:38 -0400</lastBuildDate>
+        <lastBuildDate>Thu, 02 Oct 2025 07:10:48 -0400</lastBuildDate>
         <managingEditor>LatAm Prompt News Feed</managingEditor>
         <webMaster>LatAm Prompt News Feed</webMaster>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
       
     <item>
-      <title>LatAm Prompt News Feed - October 01, 2025</title>
+      <title>LatAm Prompt News Feed - October 02, 2025</title>
       <link>https://latamprompt.github.io/Online-Feed/</link>
-      <guid isPermaLink="false">2025-10-01</guid>
-      <pubDate>Wed, 01 Oct 2025 06:40:38 -0400</pubDate>
+      <guid isPermaLink="false">2025-10-02</guid>
+      <pubDate>Thu, 02 Oct 2025 07:10:48 -0400</pubDate>
       <author>LatAm Prompt News Feed</author>
       <description><![CDATA[
-      <h3><a href="https://www.bloomberg.com/news/articles/2025-09-30/uruguay-wants-rich-expats-to-pay-more-to-qualify-for-tax-breaks">Uruguay Wants Rich Expats to Pay More to Qualify for Tax Breaks</a> &mdash; Bloomberg</h3>
-      <p>Uruguay Wants Rich Expats to Pay More to Qualify for Tax Breaks</p>
+      <h3><a href="https://www.washingtonpost.com/opinions/2025/10/01/mexico-cartels-assault-weapons-ban/">America’s guns keep Mexico bleeding</a> &mdash; The Washington Post</h3>
+      <p>Without an assault weapons ban in the United States, Mexican cartels will get all the guns they need.</p>
       <hr/>
     
-      <h3><a href="https://www.reuters.com/business/energy/clean-energy-glut-draws-cryptocurrency-miners-brazil-2025-09-30/">Clean energy glut draws cryptocurrency miners to Brazil</a> &mdash; Reuters</h3>
-      <p>Clean energy glut draws cryptocurrency miners to Brazil</p>
+      <h3><a href="https://www.nytimes.com/2025/10/02/world/americas/mexico-morena-wealth-poor.html">Mexico’s Party of the Poor Faces Image Problems as Some Members Spend Big</a> &mdash; The New York Times </h3>
+      <p>Mexico’s dominant party, Morena, rose to power by championing the poor. Now it is having to explain the luxurious lifestyles of some of its most prominent members.</p>
       <hr/>
     
-      <h3><a href="https://www.wsj.com/world/americas/u-s-pulls-plug-on-haitis-last-big-industry-eef9d26f">U.S. Pulls Plug on Haiti’s Last Big Industry</a> &mdash; The Wall Street Journal</h3>
-      <p>The end of a trade initiative imperils embattled clothing exporters that employ thousands who make garments for Hanes, Calvin Klein and Gap.</p>
+      <h3><a href="https://www.ft.com/content/2f9deac2-b688-49c3-a5c3-b3ec4fc99232">Going back to the 1970s won’t save Mexico</a> &mdash; The Financial Times</h3>
+      <p>Embracing protectionism to prevent Chinese dumping and appease Trump will fail — just like import substitution did</p>
+      <hr/>
+    
+      <h3><a href="https://www.reuters.com/world/americas/brazils-jacu-bird-poo-poos-us-tariffs-specialty-coffee-sector-suffers-2025-10-01/">Brazil's Jacu bird poo-poos US tariffs as specialty coffee sector suffers</a> &mdash; Reuters</h3>
+      <p>Brazil's Jacu bird poo-poos US tariffs as specialty coffee sector suffers</p>
+      <hr/>
+    
+      <h3><a href="https://www.economist.com/the-americas/2025/10/01/a-german-newspaper-for-bolivian-blondes">A German newspaper for Bolivian blondes</a> &mdash; The Economist</h3>
+      <p>For Mennonites from Bolivia to Belize, Die Mennonitische Post is often the only connection to the outside world</p>
       <hr/>
     ]]></description>
     </item>
